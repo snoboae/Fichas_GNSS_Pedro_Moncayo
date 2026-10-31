@@ -1,0 +1,118 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Prueba del motor · Inspección GNSS</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; background: #0e141b; color: #e8eef4; }
+  h1 { font-size: 16px; margin: 0 0 10px; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #161f28; padding: 12px; border-radius: 10px; }
+  .ok { color: #6fdc9d; } .err { color: #ff8a80; } .warn { color: #ffc266; }
+  iframe, img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h1>Prueba del motor (datos, croquis, PDF, IndexedDB, ZIP)</h1>
+<pre id="out">Ejecutando…</pre>
+<div id="visor"></div>
+
+<script src="../js/config.js"></script>
+<script src="../js/datos.js"></script>
+<script src="../js/logos.js"></script>
+<script src="../js/geo.js"></script>
+<script src="../js/db.js"></script>
+<script src="../js/fotos.js"></script>
+<script src="../js/mapimg.js"></script>
+<script src="../js/zip.js"></script>
+<script src="../lib/jspdf/jspdf.umd.min.js"></script>
+<script src="../js/pdf.js"></script>
+<script src="../js/drive.js"></script>
+<script>
+const out = document.getElementById('out');
+const lineas = [];
+const log = (m, cls) => {
+  lineas.push(m);
+  out.innerHTML = lineas.map((l) => l.startsWith('OK') ? `<span class="ok">${l}</span>`
+    : l.startsWith('FALLA') ? `<span class="err">${l}</span>`
+    : l.startsWith('AVISO') ? `<span class="warn">${l}</span>` : l).join('\n');
+};
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+(async () => {
+  try {
+    log('Puntos cargados: ' + PUNTOS.length);
+    // 1) conversión UTM -> geográficas
+    const p = PUNTOS[0];
+    const ll = Geo.puntoLatLon(p);
+    log(`OK ${p.c}: ${Geo.latDMS(ll.lat)} / ${Geo.lonDMS(ll.lon)}`);
+    if (Math.abs(ll.lat - 0.0836352) > 1e-6) log('FALLA latitud fuera de tolerancia: ' + ll.lat);
+
+    // 2) croquis con teselas Esri (necesita internet)
+    const t0 = performance.now();
+    const cr = await Croquis.render({ lat: ll.lat, lon: ll.lon, codigo: p.c, e: p.e, n: p.n });
+    log(`OK croquis ${Math.round(cr.dataUrl.length / 1024)} KB, zoom ${cr.z}, teselas=${cr.conTeselas} (${Math.round(performance.now() - t0)} ms)`);
+    if (!cr.conTeselas) log('AVISO sin teselas: revisar internet o el servicio Esri');
+    const img = new Image(); img.src = cr.dataUrl; document.getElementById('visor').appendChild(img);
+
+    // 3) IndexedDB: guardar ficha y foto, leerlas
+    const ficha = {      id: p.c, codigo: p.c, nombre: p.nombre, parroquia: p.parroquia, sector: p.sector,
+      este: p.e, norte: p.n, orden: p.orden, materializacion: p.mat,
+      lat: ll.lat, lon: ll.lon, latDMS: Geo.latDMS(ll.lat), lonDMS: Geo.lonDMS(ll.lon),
+      inicio: '2026-10-31T09:15', fin: '2026-10-31T10:05', fecha: '2026-10-31', operador: 'Prueba automática',
+      receptor: 'Gintec G40 Pro', alturaAntena: 1.532, duracionMin: 50,
+      metodo: 'Estático diferencial', mascara: 10, intervalo: 1,
+      descripcion: 'Prueba', accesibilidad: 'Prueba', observaciones: 'Prueba',
+      croquis: cr.dataUrl, croquisZ: cr.z, creado: Date.now(), actualizado: Date.now()
+    };
+    await DB.put('fichas', ficha);
+    const leidas = await DB.all('fichas');
+    log(`OK IndexedDB: ${leidas.length} ficha(s) guardada(s)`);
+
+    // 3b) caché de croquis (lo que se prepara en oficina)
+    await DB.put('croquis', { codigo: p.c, dataUrl: cr.dataUrl, z: cr.z, fecha: Date.now() });
+    const cc = await DB.get('croquis', p.c);
+    log('OK caché de croquis: ' + (cc ? Math.round(cc.dataUrl.length / 1024) + ' KB, zoom ' + cc.z : 'NO')) ;
+    await DB.del('croquis', p.c);
+
+    // 4) foto: canvas -> blob -> procesar
+    const cv = document.createElement('canvas'); cv.width = 1600; cv.height = 1200;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#4a6b3a'; g.fillRect(0, 0, 1600, 900); g.fillStyle = '#8a9aa8'; g.fillRect(0, 0, 1600, 620);
+    const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.9));
+    const file = new File([blob], 'prueba.jpg', { type: 'image/jpeg' });
+    const pr = await Fotos.procesar(file);
+    await Fotos.add({ id: 'f1', fichaId: p.c, tipo: 'punto', blob: pr.blob, orig: pr.orig, thumb: pr.thumb, w: pr.w, h: pr.h, orden: 1, nombre: 'prueba.jpg' });
+    const metas = await Fotos.byFicha(p.c);
+    log(`OK foto guardada (${Math.round(pr.blob.size / 1024)} KB liviana, original ${Math.round(pr.orig.size / 1024)} KB), metas=${metas.length}`);
+
+    // 5) PDF de una hoja
+    const v = await Fotos.paraPDF(pr.blob, 1200);
+    const doc = PDF.fichaDoc(ficha, [
+      { tipo: 'punto', dataUrl: v.dataUrl, w: v.w, h: v.h },
+      { tipo: 'placa', dataUrl: v.dataUrl, w: v.w, h: v.h }
+    ]);
+    const pdf = doc.output('blob');
+    log(`OK PDF ${Math.round(pdf.size / 1024)} KB, páginas=${doc.getNumberOfPages()}` + (doc.getNumberOfPages() === 1 ? '' : '  <-- FALLA: debe ser 1'));
+
+    // 6) ZIP con la foto
+    const zip = await Zip.build([{ name: 'foto.jpg', blob: pr.blob }]);
+    log(`OK ZIP ${Math.round(zip.size / 1024)} KB`);
+
+    // 7) GeoJSON y CSV
+    log('OK GeoJSON: ' + JSON.stringify(JSON.parse(JSON.stringify({ type: 'Feature', geometry: { type: 'Point', coordinates: [ll.lon, ll.lat] }, properties: { codigo: p.c } }))).length + ' bytes');
+
+    // 8) JSON de la ficha para Drive
+    const datos = JSON.stringify({ proyecto: PROYECTO, ficha: Object.assign({}, ficha, { croquis: undefined }) });
+    log(`OK JSON de la ficha: ${Math.round(datos.length / 1024)} KB (sin croquis)`);
+
+    // limpieza (salvo que se pida dejar la ficha sembrada para probar la app)
+    const sembrar = /[?&]sembrar=1/.test(location.search);
+    if (sembrar) { log('OK ficha y foto sembradas en IndexedDB (no se borran)'); }
+    else { await Fotos.remove('f1'); await DB.del('fichas', p.c); log('OK limpieza'); }
+    log('— FIN —');
+  } catch (e) {
+    log('FALLA: ' + e.message + '\n' + (e.stack || ''));
+  }
+})();
+</script>
+</body></html>

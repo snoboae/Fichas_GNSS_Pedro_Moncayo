@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Prueba de migración de fichas</title></head>
+<body>
+<pre id="out">Ejecutando…</pre>
+<iframe id="app" src="../index.html" style="width:1px;height:1px;opacity:0;border:0" title="app"></iframe>
+<script>
+/* 1) crea una base como la de la versión anterior (fecha + hora separadas)
+   2) abre la app en un iframe: al iniciar debe migrar la ficha sola
+   3) lee la ficha y comprueba el formato nuevo */
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+out.textContent = 'Sembrando ficha en formato anterior…';
+
+const ANTES = {
+  id: 'RG-50-01', codigo: 'RG-50-01', nombre: 'Mirador Mojanda', parroquia: 'Tabacundo',
+  sector: 'Mirador Mojanda', este: 807122, norte: 10009255, orden: 1, materializacion: 'Mojón Tipo A',
+  fecha: '2026-10-28', horaInicio: '09:15', horaFin: '10:05', duracionMin: 50,
+  operador: 'Operador anterior', receptor: 'Foif A60 Pro', alturaAntena: 1.6,
+  alturaElipsoidal: 2784.235, sats: 18, gdop: 1.8, metodo: 'Estático diferencial',
+  mascara: 10, intervalo: 1, descripcion: 'Anterior', accesibilidad: 'Anterior', observaciones: 'Anterior',
+  datum: 'SIRGAS-ECUADOR (REGME) — ITRF2008', epoca: '2016.44',
+  creado: Date.now(), actualizado: Date.now()
+};
+
+const r1 = indexedDB.deleteDatabase('fichas-gnss');
+r1.onsuccess = r1.onerror = r1.onblocked = () => crear();
+
+function crear() {
+  const r = indexedDB.open('fichas-gnss', 1);
+  r.onupgradeneeded = () => {
+    const d = r.result;
+    d.createObjectStore('fichas', { keyPath: 'id' });
+    const p = d.createObjectStore('photos', { keyPath: 'id' });
+    p.createIndex('fichaId', 'fichaId');
+    const m = d.createObjectStore('pmeta', { keyPath: 'id' });
+    m.createIndex('fichaId', 'fichaId');
+    d.createObjectStore('kv', { keyPath: 'key' });
+  };
+  r.onerror = () => log('FALLA al crear v1: ' + r.error);
+  r.onsuccess = () => {
+    const db = r.result;
+    const tx = db.transaction('fichas', 'readwrite');
+    tx.objectStore('fichas').put(ANTES);
+    tx.oncomplete = () => { db.close(); log('OK ficha antigua sembrada (fecha + hora separadas)'); esperar(); };
+  };
+}
+
+function esperar() {
+  log('Abriendo la app (debe migrar sola)…');
+  setTimeout(() => leer(), 6000);
+}
+
+function leer() {
+  const r = indexedDB.open('fichas-gnss');
+  r.onsuccess = () => {
+    const db = r.result;
+    const tx = db.transaction('fichas', 'readonly');
+    const g = tx.objectStore('fichas').get('RG-50-01');
+    g.onsuccess = () => {
+      const f = g.result;
+      if (!f) { log('FALLA: la ficha desapareció'); return; }
+      log('OK inicio = ' + f.inicio);
+      log('OK fin    = ' + f.fin);
+      log('OK fecha  = ' + f.fecha);
+      log('OK metodo = ' + f.metodo + ' · máscara ' + f.mascara + ' · intervalo ' + f.intervalo);
+      log('OK lat/lon recalculados = ' + (f.lat != null) + ' / ' + (f.lon != null));
+      log('OK campos viejos eliminados: ' + (f.horaInicio === undefined && f.alturaElipsoidal === undefined && f.sats === undefined && f.datum === undefined));
+      log('OK versión de la base: ' + db.version);
+      log('— FIN —');
+      db.close();
+    };
+  };
+}
+</script>
+</body></html>

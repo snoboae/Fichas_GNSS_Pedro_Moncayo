@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#123a6b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fichas GNSS">
+<meta name="description" content="Fichas de campo de la red geodésica del Cantón Pedro Moncayo (SIRGAS-ECUADOR / UTM 17S).">
+<title>Fichas GNSS · Pedro Moncayo</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="lib/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/app.css">
+<script>
+/* Errores no controlados: se registran en la consola y en el título (para diagnóstico). */
+window.__errs = [];
+addEventListener('error', (e) => {
+  window.__errs.push(e.message + ' @ ' + (e.filename || '') + ':' + e.lineno);
+  console.error('Error no controlado:', e.message, e.filename, e.lineno);
+});
+addEventListener('unhandledrejection', (e) => {
+  const m = (e.reason && (e.reason.message || e.reason)) || '';
+  window.__errs.push('promesa: ' + m);
+  console.error('Promesa rechazada sin manejar:', m);
+});
+</script>
+</head>
+<body>
+
+<header class="topbar">
+  <img class="toplogo" src="img/geocaliza.png" alt="Geocaliza">
+  <div class="toptitle">
+    <strong>Fichas GNSS</strong>
+    <span>Red geodésica · Pedro Moncayo</span>
+  </div>
+  <span id="net" class="net" title="Estado de conexión">en línea</span>
+</header>
+
+<main>
+
+<!-- ===================== 1. PUNTOS ===================== -->
+<section id="v-puntos" class="view">
+
+  <div class="panel">
+    <h2>Seleccionar punto</h2>
+    <p class="hint">Los 22 puntos del diseño de la red. El <b class="ok">✓ verde</b> indica que la ficha ya está guardada en este teléfono.</p>
+
+    <!-- Lista desplegable (combo propio: permite el check verde por punto) -->
+    <div class="combo" id="combo">
+      <button type="button" class="combo-btn" id="comboBtn" aria-haspopup="listbox" aria-expanded="false">
+        <span class="combo-lab">CÓDIGO</span>
+        <span class="combo-val" id="comboVal">Elegir un punto…</span>
+        <span class="combo-car">▾</span>
+      </button>
+      <div class="combo-panel hidden" id="comboPanel" role="listbox" aria-label="Puntos de la red">
+        <input type="search" id="comboQ" class="combo-q" placeholder="Buscar código, parroquia o sitio…" autocomplete="off">
+        <div class="combo-list" id="comboList"></div>
+      </div>
+    </div>
+
+    <div class="acciones-punto">
+      <button class="btn ir" id="btnIr" disabled>
+        <span class="ic">➤</span>
+        <span>IR AL PUNTO<small>Abrir en Maps</small></span>
+      </button>
+      <button class="btn levantar" id="btnLevantar" disabled>
+        <span class="ic">✎</span>
+        <span>LEVANTAR FICHA<small>Registrar la observación</small></span>
+      </button>
+    </div>
+    <p class="hint center" id="puntoSelHint">Elige un código para habilitar las dos opciones.</p>
+  </div>
+
+  <div class="panel hidden" id="panelPunto">
+    <h2 id="pp-nombre">—</h2>
+    <p class="pp-sub" id="pp-sub">—</p>
+    <div class="kv2" id="pp-datos"></div>
+    <div class="row wrap">
+      <button class="btn small" id="btnVerFicha">Ver ficha guardada</button>
+      <button class="btn small" id="btnMapaPunto">Mapa del punto</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="bar wrap">
+      <h2 class="grow">Avance del levantamiento</h2>
+      <span class="pill" id="avancePill">0 / 22</span>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+    <input type="search" id="q" class="filter" placeholder="Buscar punto por código, parroquia o sitio…" autocomplete="off">
+    <div id="listaPuntos" class="listapuntos"></div>
+    <div class="row wrap">
+      <button class="btn small" id="btnCsv">Exportar avance (CSV)</button>
+      <button class="btn small" id="btnGeo">Exportar puntos (GeoJSON)</button>
+      <button class="btn small" id="btnPrepCroquis">Preparar croquis de los 22 puntos</button>
+    </div>
+    <p class="hint" id="croquisPrepMsg">Genera de una vez los croquis de todos los puntos: hazlo en oficina, con wifi, y en campo no hará falta internet para la ficha.</p>
+  </div>
+</section>
+
+<!-- ===================== 2. FICHA ===================== -->
+<section id="v-ficha" class="view hidden">
+  <div class="bar sticky">
+    <button class="btn" id="btnFichaBack">← Volver</button>
+    <button class="btn primary" id="btnGuardar">Guardar ficha</button>
+  </div>
+
+  <div class="panel">
+    <h2 id="f-titulo">Ficha del punto</h2>
+    <p class="hint">Los campos con candado se llenan solos desde el diseño de la red. Solo se editan los datos de la observación.</p>
+    <div class="form">
+      <label class="fld"><span>NOMBRE DEL PUNTO</span><input id="f-nombre" autocomplete="off"></label>
+      <label class="fld"><span>CÓDIGO 🔒</span><input id="f-codigo" readonly></label>
+      <label class="fld"><span>PARROQUIA 🔒</span><input id="f-parroquia" readonly></label>
+      <label class="fld"><span>SECTOR / SITIO</span><input id="f-sector" autocomplete="off"></label>
+      <label class="fld"><span>COORDENADA X (Este) 🔒</span><input id="f-este" readonly></label>
+      <label class="fld"><span>COORDENADA Y (Norte) 🔒</span><input id="f-norte" readonly></label>
+      <label class="fld"><span>ORDEN 🔒</span><input id="f-orden" readonly></label>
+      <label class="fld"><span>ZONA / DATUM 🔒</span><input id="f-zona" readonly></label>
+      <label class="fld wide"><span>MATERIALIZACIÓN</span><select id="f-mat"></select></label>
+    </div>
+    <p class="hint" id="f-trabajos"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Observación GNSS</h2>
+    <p class="hint">El método y los parámetros de la sesión son los que fija el TR y no se editan:
+      <b>posicionamiento estático diferencial · máscara 10° · intervalo 1 s</b>.</p>
+    <div class="form">
+      <label class="fld"><span>RECEPTOR GNSS</span><select id="f-receptor"></select></label>
+      <label class="fld"><span>ALTURA DE LA ANTENA (m)</span><input id="f-altura" type="number" inputmode="decimal" step="0.001" min="0" placeholder="Ej. 1.532"></label>
+      <label class="fld"><span>INICIO (fecha y hora)</span><input id="f-inicio" type="datetime-local" step="60"></label>
+      <label class="fld"><span>FIN (fecha y hora)</span><input id="f-fin" type="datetime-local" step="60"></label>
+      <label class="fld"><span>DURACIÓN</span><input id="f-dur" readonly placeholder="—"></label>
+      <label class="fld"><span>OPERADOR EN CAMPO</span><input id="f-operador" list="lstOperadores" autocomplete="off" placeholder="Nombre y apellido"></label>
+      <datalist id="lstOperadores"></datalist>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Croquis de ubicación</h2>
+    <p class="hint">Se arma con la imagen satelital Esri centrada en el punto. Si no hay internet, el croquis se puede generar después: la ficha se guarda igual.</p>
+    <div id="croquisBox" class="croquisbox">
+      <div class="croquis-empty" id="croquisEmpty">Sin croquis todavía</div>
+      <img id="croquisImg" class="hidden" alt="Croquis de ubicación del punto">
+    </div>
+    <div class="row wrap">
+      <button class="btn" id="btnCroquis">Generar croquis</button>
+      <button class="btn small" id="btnVerCroquis">Ampliar</button>
+    </div>
+    <p class="hint" id="croquisMsg"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Fotografía del punto</h2>
+    <p class="hint">La <b>primera</b> foto es la que se imprime en la ficha. Puedes agregar más: se guardan y se suben a Drive, pero no salen en la hoja.</p>
+    <div class="row wrap">
+      <button class="btn primary" data-foto="punto" data-src="cam">Tomar foto</button>
+      <button class="btn" data-foto="punto" data-src="gal">Agregar de la galería</button>
+    </div>
+    <div id="fotos-punto" class="photos"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Fotografía de la placa</h2>
+    <p class="hint">Primer plano de la placa o del mojón con su inscripción. La <b>primera</b> va en la ficha; las demás se suben a Drive.</p>
+    <div class="row wrap">
+      <button class="btn primary" data-foto="placa" data-src="cam">Tomar foto</button>
+      <button class="btn" data-foto="placa" data-src="gal">Agregar de la galería</button>
+    </div>
+    <div id="fotos-placa" class="photos"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Descripción y observaciones</h2>
+    <label class="fld"><span>DESCRIPCIÓN DEL PUNTO</span>
+      <textarea id="f-desc" rows="3" placeholder="Dónde está exactamente el punto, referencias cercanas, estado del sitio…"></textarea></label>
+    <label class="fld"><span>ACCESIBILIDAD</span>
+      <textarea id="f-acceso" rows="2" placeholder="Cómo llegar desde una referencia conocida…"></textarea></label>
+    <label class="fld"><span>OBSERVACIONES</span>
+      <textarea id="f-obs" rows="3" placeholder="Novedades, restricciones, acuerdos con la comunidad, incidencias…"></textarea></label>
+  </div>
+
+  <div class="panel" id="panelDiseno">
+    <h2>Diseño de referencia</h2>
+    <p class="hint">Lo que el informe de inspección in situ previó para este sitio (no se guarda en la ficha).</p>
+    <div id="f-notas" class="notas"></div>
+  </div>
+</section>
+
+<!-- ===================== 3. DETALLE ===================== -->
+<section id="v-detalle" class="view hidden">
+  <div class="bar sticky">
+    <button class="btn" id="btnDetBack">← Volver</button>
+    <button class="btn primary" id="btnDetPdf">Descargar PDF</button>
+  </div>
+  <div class="panel">
+    <h2 id="d-titulo">—</h2>
+    <p class="pp-sub" id="d-sub">—</p>
+    <div class="kv2" id="d-datos"></div>
+  </div>
+  <div class="panel" id="d-mapPanel">
+    <h2>Mapa del punto</h2>
+    <div id="d-map" class="map"></div>
+    <p class="hint" id="d-gps">—</p>
+    <div class="row wrap">
+      <button class="btn small" id="d-miUbicacion">Mi ubicación</button>
+      <button class="btn small" id="d-ir">Ir al punto</button>
+    </div>
+  </div>
+  <div class="panel hidden" id="d-croquisPanel">
+    <h2>Croquis de ubicación</h2>
+    <div class="preview"><img id="d-croquis" alt="Croquis"></div>
+  </div>
+  <div class="panel" id="d-fotosPanel">
+    <h2>Fotografías</h2>
+    <div id="d-fotos" class="dphotos"></div>
+  </div>
+  <div class="panel">
+    <h2>Estado en Google Drive</h2>
+    <p class="hint" id="d-drive">—</p>
+    <button class="btn small" id="d-subir">Subir esta ficha a Drive</button>
+  </div>
+  <div class="panel">
+    <h2>Acciones</h2>
+    <div class="actgrid">
+      <button class="btn" id="d-pdf">Descargar PDF</button>
+      <button class="btn" id="d-share">Compartir PDF</button>
+      <button class="btn" id="d-geo">Exportar el punto (GeoJSON)</button>
+      <button class="btn" id="d-zip">Descargar fotos (ZIP)</button>
+      <button class="btn" id="d-edit">Editar ficha</button>
+      <button class="btn danger" id="d-del">Eliminar ficha</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 4. DRIVE ===================== -->
+<section id="v-drive" class="view hidden">
+  <div class="panel">
+    <h2>Google Drive</h2>
+    <p class="hint">Las fichas, las fotografías y los datos se suben a la carpeta del proyecto. La app crea una carpeta por día y, dentro, una carpeta por código de punto.</p>
+    <div class="drive-estado">
+      <span class="dot" id="driveDot"></span>
+      <div>
+        <b id="driveCuenta">Sin configurar</b>
+        <small id="driveDetalle">Falta la URL y la clave del script de Drive.</small>
+      </div>
+    </div>
+    <div class="form">
+      <label class="fld wide"><span>URL DEL SCRIPT (termina en /exec)</span>
+        <input id="driveUrl" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label class="fld wide"><span>CLAVE DEL SCRIPT</span>
+        <input id="driveClave" autocomplete="off" placeholder="La misma clave que pusiste en Code.gs"></label>
+    </div>
+    <div class="row wrap">
+      <button class="btn primary" id="btnProbar">Guardar y probar</button>
+      <button class="btn" id="btnAbrirPing">Abrir la prueba en el navegador</button>
+      <button class="btn" id="btnAbrirCarpeta">Abrir la carpeta en Drive</button>
+    </div>
+    <p class="hint" id="driveCarpetaMsg"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Subida</h2>
+    <div class="subida-resumen" id="driveResumen">—</div>
+    <label class="chk"><input type="checkbox" id="autoSubir"> <span>Subir automáticamente al guardar una ficha</span></label>
+    <label class="chk"><input type="checkbox" id="borrarOrig"> <span>Liberar las fotos originales después de subirlas (ahorra espacio)</span></label>
+    <div class="row wrap">
+      <button class="btn primary" id="btnSubirTodo">Subir fichas pendientes</button>
+      <button class="btn" id="btnReintentar">Reintentar fallidas</button>
+    </div>
+    <div id="driveCola" class="cola"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Cómo conectarlo (una sola vez)</h2>
+    <details>
+      <summary>Pasos para publicar el script en tu Drive</summary>
+      <div class="detalle">
+        <ol>
+          <li>Entra a <b>script.google.com</b> con la cuenta dueña de la carpeta y elige <b>Nuevo proyecto</b>.</li>
+          <li>Borra lo que aparece y pega el contenido de <code>herramientas/Code.gs</code> (viene con la app).</li>
+          <li>En la primera línea cambia <code>CLAVE</code> por una palabra secreta tuya; anótala.</li>
+          <li><b>Implementar → Nueva implementación → Aplicación web</b>: <i>Ejecutar como</i> <b>Yo</b> y <i>Quién tiene acceso</i> <b>Cualquier persona</b>.</li>
+          <li>Copia la <b>URL</b> que termina en <code>/exec</code>, pégala arriba con la clave y pulsa <b>Guardar y probar</b>.</li>
+        </ol>
+        <p class="hint">El script crea la carpeta <b id="carpetaNombre">Inspección GNSS - Pedro Moncayo</b> en tu Drive y guarda ahí todo. No hace falta OAuth ni proyecto de Google Cloud.</p>
+      </div>
+    </details>
+  </div>
+</section>
+<!-- ===================== 5. RESPALDO ===================== -->
+<section id="v-respaldo" class="view hidden">
+  <div class="panel">
+    <h2>Estado de la app</h2>
+    <p id="offlineState" class="hint"></p>
+    <p class="hint" id="storageInfo"></p>
+    <p class="hint" id="versionInfo"></p>
+  </div>
+  <div class="panel">
+    <h2>Respaldo de las fichas</h2>
+    <p class="hint">Exporta un <code>.json</code> con todas las fichas (sin fotografías). Úsalo para pasar los datos a otro teléfono o para respaldar antes de actualizar.</p>
+    <div class="row wrap">
+      <button class="btn primary" id="btnBackup">Exportar respaldo (.json)</button>
+      <label class="btn filebtn">Importar respaldo<input type="file" id="fileRestore" accept=".json,application/json"></label>
+    </div>
+    <p class="hint" id="backupInfo"></p>
+  </div>
+  <div class="panel">
+    <h2>Fotografías</h2>
+    <p class="hint">Descarga un <code>.zip</code> con todas las fotos de todas las fichas y un índice CSV.</p>
+    <button class="btn" id="btnZipAll">Descargar todas las fotos (ZIP)</button>
+    <p class="hint" id="zipInfo"></p>
+  </div>
+  <div class="panel">
+    <h2>Datos del proyecto</h2>
+    <div class="form">
+      <label class="fld wide"><span>CARPETA DE DRIVE (NOMBRE)</span><input id="a-carpeta" autocomplete="off"></label>
+      <label class="fld wide"><span>OPERADORES (uno por línea)</span><textarea id="a-operadores" rows="3"></textarea></label>
+    </div>
+    <div class="row wrap"><button class="btn" id="btnGuardarAjustes">Guardar datos</button></div>
+    <p class="hint">El sistema de referencia es fijo: <b>WGS84 · UTM 17S (EPSG:32717)</b>.</p>
+  </div>
+  <div class="panel">
+    <h2>Peligro</h2>
+    <button class="btn danger" id="btnBorrarTodo">Borrar todas las fichas y fotos de este teléfono</button>
+  </div>
+</section>
+
+</main>
+
+<nav class="tabs">
+  <button data-tab="puntos" class="on">Puntos</button>
+  <button data-tab="drive">Drive</button>
+  <button data-tab="respaldo">Respaldo</button>
+</nav>
+
+<!-- hoja de acciones del punto -->
+<div class="sheet hidden" id="sheet">
+  <div class="sheet-bg" data-close></div>
+  <div class="sheet-card">
+    <h3 id="sheetTitle">—</h3>
+    <p class="pp-sub" id="sheetSub">—</p>
+    <button class="btn ir big" id="shIr"><span class="ic">➤</span><span>IR AL PUNTO<small>Abrir Maps con la ruta</small></span></button>
+    <button class="btn levantar big" id="shLevantar"><span class="ic">✎</span><span>LEVANTAR FICHA<small>Registrar la observación en campo</small></span></button>
+    <button class="btn hidden" id="shVer"><span class="ic">✓</span><span>VER FICHA GUARDADA<small>Abrir, descargar o subir</small></span></button>
+    <button class="btn ghost" data-close>Cerrar</button>
+  </div>
+</div>
+
+<div id="visor" class="visor hidden"><img id="visorImg" alt="Croquis ampliado"><button class="visor-x" id="visorClose">×</button></div>
+<input type="file" id="camPunto" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="camPlaca" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="galPunto" accept="image/*" multiple class="hidden">
+<input type="file" id="galPlaca" accept="image/*" multiple class="hidden">
+
+<div id="updateBar" class="updatebar hidden"><span>Hay una versión nueva de la app.</span><button class="btn small" id="btnReload">Actualizar</button></div>
+<div id="toast" class="toast hidden"></div>
+<div id="busy" class="busy hidden"><div id="busyMsg">Procesando…</div></div>
+
+<script src="lib/leaflet/leaflet.js"></script>
+<script src="lib/jspdf/jspdf.umd.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/datos.js"></script>
+<script src="js/logos.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/db.js"></script>
+<script src="js/fotos.js"></script>
+<script src="js/mapimg.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/drive.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Prueba de migración de la base local</title></head>
+<body>
+<pre id="out">Ejecutando…</pre>
+<script>
+/* Crea la base en la versión 1 (la que tienen los teléfonos que ya usaron una versión
+   anterior de la app) y comprueba que al abrirla con js/db.js se migra a la versión 2
+   conservando las fichas y creando el store nuevo de croquis. */
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+out.textContent = 'Creando base versión 1…';
+
+const req = indexedDB.open('fichas-gnss', 1);
+req.onupgradeneeded = () => {
+  const d = req.result;
+  d.createObjectStore('fichas', { keyPath: 'id' });
+  const p = d.createObjectStore('photos', { keyPath: 'id' });
+  p.createIndex('fichaId', 'fichaId');
+  const m = d.createObjectStore('pmeta', { keyPath: 'id' });
+  m.createIndex('fichaId', 'fichaId');
+  d.createObjectStore('kv', { keyPath: 'key' });
+};
+req.onerror = () => log('FALLA al crear v1: ' + req.error);
+req.onsuccess = () => {
+  const db = req.result;
+  const tx = db.transaction('fichas', 'readwrite');
+  tx.objectStore('fichas').put({ id: 'RG-50-01', codigo: 'RG-50-01', nombre: 'Anterior' });
+  tx.oncomplete = () => {
+    db.close();
+    log('OK base v1 creada con 1 ficha');
+    const s = document.createElement('script');
+    s.src = '../js/db.js';
+    s.onload = async () => {
+      try {
+        const fichas = await DB.all('fichas');
+        log('OK fichas conservadas: ' + fichas.length + (fichas[0] ? ' (' + fichas[0].id + ')' : ''));
+        await DB.put('croquis', { codigo: 'RG-50-01', dataUrl: 'data:image/jpeg;base64,AAAA', z: 18, fecha: Date.now() });
+        const c = await DB.get('croquis', 'RG-50-01');
+        log('OK store de croquis creado y usable: ' + (c ? c.codigo : 'NO'));
+        const v = await new Promise((res) => { const r = indexedDB.open('fichas-gnss'); r.onsuccess = () => { res(r.result.version); r.result.close(); }; });
+        log('OK versión de la base: ' + v);
+        log('— FIN —');
+      } catch (e) { log('FALLA: ' + e.message + '\n' + (e.stack || '')); }
+    };
+    s.onerror = () => log('FALLA al cargar db.js');
+    document.head.appendChild(s);
+  };
+};
+</script>
+</body></html>

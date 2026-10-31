@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Prueba real del script de Drive</title></head>
+<body>
+<pre id="out">Probando…</pre>
+<script src="../js/config.js"></script>
+<script src="../js/drive.js"></script>
+<script>
+/* Prueba REAL desde el navegador: llama al script publicado y comprueba que:
+     - el navegador puede leer la respuesta (CORS)
+     - el script responde JSON
+     - la clave se valida
+   Uso: prueba-drive-real.html?clave=TU_CLAVE
+   (sin clave usa una incorrecta, que sirve para comprobar el camino de error) */
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+out.textContent = 'Script: ' + CONFIG.driveScriptUrl;
+
+const params = new URLSearchParams(location.search);
+const clave = params.get('clave') || 'clave-de-prueba';
+
+(async () => {
+  try {
+    const r = await Drive.probar(CONFIG.driveScriptUrl, clave);
+    log('OK  el script respondió y el navegador pudo leer la respuesta (CORS correcto)');
+    log('OK  cuenta: ' + (r.cuenta || '(sin correo)'));
+    log('OK  carpeta: ' + (r.raiz || '(sin nombre)'));
+    log('OK  enlace: ' + (r.raizUrl || '(sin enlace)'));
+    log('— FIN —');
+  } catch (e) {
+    if (e.code === 'clave') {
+      log('AVISO clave incorrecta (esto confirma que el script responde y valida la clave)');
+      log('      código: ' + e.code);
+      log('— FIN —');
+    } else {
+      log('FALLA [' + e.code + '] ' + e.message);
+      log('— FIN —');
+    }
+  }
+})();
+</script>
+</body></html>
