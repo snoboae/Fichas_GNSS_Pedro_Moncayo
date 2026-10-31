@@ -201,6 +201,28 @@ Opciones: `publicar.bat -Nuevo` (crear otro repositorio), `-Reconfigurar`,
 En el teléfono: abrir esa dirección con Chrome/Safari y elegir **Instalar app** o
 **Añadir a pantalla de inicio**.
 
+### Cómo llega la versión nueva a los teléfonos
+
+Cada vez que se publica, el script cambia la versión del `sw.js` (un código corto calculado con el
+contenido). Con eso el teléfono sabe que hay algo nuevo:
+
+1. La app **busca actualizaciones sola** al abrirse, al volver a primer plano (cuando el operador la
+   retoma) y cada 15 minutos si queda abierta.
+2. Si encuentra una versión nueva, aparece una barra abajo:
+   **“Hay una versión nueva (vXXXX). [Actualizar] ×”**.
+   - **Actualizar** recarga en un segundo con la versión nueva.
+   - **×** la deja para después (no vuelve a molestar en esa sesión).
+   - Si el operador está **llenando una ficha**, la barra **no lo interrumpe**: el aviso queda
+     pendiente y aparece al salir del formulario, para no perder lo que iba escribiendo.
+3. En **Respaldo → Estado de la app** hay un botón **“Buscar actualización”** (con la versión
+   instalada, p. ej. `build v09961618`), para forzarla en el momento.
+4. Aunque no se pulse nada, **las fichas nunca se pierden** (viven en el teléfono) y la próxima vez
+   que se abra la app ya se carga la versión nueva.
+
+> En iPhone, si la app está en la pantalla de inicio, iOS a veces tarda en revisar el service
+> worker. Por eso el aviso automático al volver a la app y el botón manual: con cualquiera de los
+> dos se actualiza sin reinstalar nada.
+
 ## 9. Estructura de archivos
 
 | Archivo | Para qué sirve |

@@ -76,6 +76,8 @@ const App = (() => {
     ['puntos', 'ficha', 'detalle', 'drive', 'respaldo'].forEach((k) => $('v-' + k).classList.toggle('hidden', k !== v));
     document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on',
       b.dataset.tab === (v === 'detalle' || v === 'ficha' ? 'puntos' : v)));
+    // si quedó una actualización pendiente y ya no hay una ficha abierta, se avisa
+    if (v !== 'ficha' && actualizacionPendiente) $('updateBar').classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
@@ -891,26 +893,108 @@ const App = (() => {
     toast('Datos del proyecto guardados.', 'ok');
   }
 
+  /* ---------------- actualizaciones de la app ---------------- */
+  let swReg = null;
+  let teniaControl = false;
+  let buildSW = '';
+  let actualizacionPendiente = false;
+
+  /* Muestra la barra "hay una versión nueva". Nunca interrumpe una ficha a medio
+     llenar: si el formulario está abierto, queda pendiente y aparece al salir. */
+  function mostrarBarra(version) {
+    const barra = $('updateBar');
+    if (!barra || !teniaControl) return;
+    actualizacionPendiente = true;
+    const txt = barra.querySelector('span');
+    if (txt) txt.textContent = version ? `Hay una versión nueva (${version}).` : 'Hay una versión nueva de la app.';
+    if (!$('v-ficha').classList.contains('hidden')) return;
+    barra.classList.remove('hidden');
+  }
+
+  async function aplicarActualizacion() {
+    const w = swReg && swReg.waiting;
+    if (w) {
+      try { w.postMessage({ tipo: 'activar' }); } catch (e) { /* nada */ }
+      setTimeout(() => location.reload(), 900);
+    } else {
+      location.reload();
+    }
+  }
+
+  function pintarVersion() {
+    const el = $('versionInfo');
+    if (el) el.textContent = `Versión ${CONFIG.version}${buildSW ? ' · build ' + buildSW : ''} · ${PROYECTO.nombre}`;
+  }
+
+  /* Busca una versión nueva en el momento (botón de la pestaña Respaldo). */
+  async function buscarActualizacion() {
+    if (!swReg) { toast('Este navegador no permite actualizar desde la app. Cierra y vuelve a abrirla.', 'err'); return; }
+    busy(true, 'Buscando actualizaciones…');
+    try {
+      await swReg.update();
+      await new Promise((r) => setTimeout(r, 900));
+      if (swReg.installing || swReg.waiting || actualizacionPendiente) {
+        mostrarBarra();
+        toast('Hay una versión nueva: pulsa "Actualizar".', 'ok');
+      } else {
+        toast('Ya tienes la última versión' + (buildSW ? ' (' + buildSW + ').' : '.'), 'ok');
+      }
+    } catch (e) {
+      toast('No se pudo buscar la actualización: ' + e.message, 'err');
+    } finally { busy(false); }
+  }
+
+  async function iniciarServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    teniaControl = !!navigator.serviceWorker.controller;
+    try {
+      swReg = await navigator.serviceWorker.register('sw.js');
+    } catch (e) {
+      console.warn('La app funciona, pero sin modo sin conexión:', e.message);
+      return;
+    }
+
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      const d = e.data || {};
+      if (d.tipo === 'nueva-version') mostrarBarra(d.version);
+      if (d.tipo === 'version') { buildSW = d.version || ''; pintarVersion(); }
+    });
+
+    swReg.addEventListener('updatefound', () => {
+      const nuevo = swReg.installing;
+      if (!nuevo) return;
+      nuevo.addEventListener('statechange', () => {
+        if (nuevo.state === 'installed' && navigator.serviceWorker.controller) mostrarBarra();
+      });
+    });
+
+    if (navigator.serviceWorker.controller) {
+      try { navigator.serviceWorker.controller.postMessage({ tipo: 'version' }); } catch (e) { /* nada */ }
+    }
+
+    /* Buscar actualizaciones: al volver a la app, al recuperar internet y cada 15 min.
+       (En el teléfono la app puede quedar abierta días sin recargar.) */
+    let ultima = 0;
+    const revisar = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - ultima < 60000) return;
+      ultima = Date.now();
+      swReg.update().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') revisar();
+    });
+    window.addEventListener('online', revisar);
+    setInterval(revisar, 15 * 60 * 1000);
+    setTimeout(revisar, 4000);
+  }
+
   /* ---------------- arranque ---------------- */
   async function init() {
     await cargarAjustes();
-    if ('serviceWorker' in navigator) {
-      try {
-        const tenia = !!navigator.serviceWorker.controller;
-        const reg = await navigator.serviceWorker.register('sw.js');
-        navigator.serviceWorker.addEventListener('message', (e) => {
-          if (tenia && e.data && e.data.tipo === 'nueva-version') $('updateBar').classList.remove('hidden');
-        });
-        reg.addEventListener('updatefound', () => {
-          const nuevo = reg.installing;
-          if (!nuevo) return;
-          nuevo.addEventListener('statechange', () => {
-            if (nuevo.state === 'installed' && navigator.serviceWorker.controller) $('updateBar').classList.remove('hidden');
-          });
-        });
-      } catch (e) { /* sin service worker */ }
-    }
-    $('btnReload').addEventListener('click', () => location.reload());
+    iniciarServiceWorker();
+    $('btnReload').addEventListener('click', aplicarActualizacion);
+    $('btnUpdateX').addEventListener('click', () => $('updateBar').classList.add('hidden'));
 
     const fichas = await DB.all('fichas');
     for (const f of fichas) {
@@ -944,7 +1028,7 @@ const App = (() => {
   }
 
   async function estadoApp() {
-    $('versionInfo').textContent = `Versión ${CONFIG.version} · ${PROYECTO.nombre}`;
+    pintarVersion();
     let txt = '';
     try {
       if (navigator.storage && navigator.storage.estimate) {
@@ -1090,6 +1174,7 @@ const App = (() => {
     $('fileRestore').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) importarRespaldo(f); e.target.value = ''; });
     $('btnZipAll').addEventListener('click', () => exportarZip(null));
     $('btnCsv').addEventListener('click', exportarCsv);
+    $('btnBuscar').addEventListener('click', buscarActualizacion);
     $('btnGeo').addEventListener('click', () => exportarGeo(null));
     $('btnPrepCroquis').addEventListener('click', prepararCroquis);
     $('btnGuardarAjustes').addEventListener('click', guardarAjustesForm);

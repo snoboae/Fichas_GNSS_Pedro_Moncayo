@@ -270,3 +270,10 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
 .updatebar { position: fixed; left: 12px; right: 12px; bottom: calc(70px + env(safe-area-inset-bottom)); z-index: 1500; display: flex; align-items: center;
   justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 12px; background: #10202f; color: #fff; box-shadow: 0 10px 26px rgba(0,0,0,.4); max-width: 880px; margin: 0 auto; }
 .updatebar .btn { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 800; }
+
+/* botón para cerrar la barra de actualización (dejarlo para después) */
+.updatebar .barra-x {
+  background: transparent; border: 0; color: inherit; font-size: 18px; line-height: 1;
+  padding: 0 6px; margin-left: 2px; opacity: .75; cursor: pointer;
+}
+.updatebar .barra-x:hover { opacity: 1; }

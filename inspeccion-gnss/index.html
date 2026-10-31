@@ -300,6 +300,8 @@ addEventListener('unhandledrejection', (e) => {
     <p id="offlineState" class="hint"></p>
     <p class="hint" id="storageInfo"></p>
     <p class="hint" id="versionInfo"></p>
+    <div class="row wrap"><button class="btn" id="btnBuscar">Buscar actualización</button></div>
+    <p class="hint">Si publicas una versión nueva, la app la detecta sola al abrirla o al volver a ella. Con este botón la buscas en el momento.</p>
   </div>
   <div class="panel">
     <h2>Respaldo de las fichas</h2>
@@ -358,7 +360,7 @@ addEventListener('unhandledrejection', (e) => {
 <input type="file" id="galPunto" accept="image/*" multiple class="hidden">
 <input type="file" id="galPlaca" accept="image/*" multiple class="hidden">
 
-<div id="updateBar" class="updatebar hidden"><span>Hay una versión nueva de la app.</span><button class="btn small" id="btnReload">Actualizar</button></div>
+<div id="updateBar" class="updatebar hidden"><span>Hay una versión nueva de la app.</span><button class="btn small" id="btnReload">Actualizar</button><button class="barra-x" id="btnUpdateX" title="Más tarde">×</button></div>
 <div id="toast" class="toast hidden"></div>
 <div id="busy" class="busy hidden"><div id="busyMsg">Procesando…</div></div>
 

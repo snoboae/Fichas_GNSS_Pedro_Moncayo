@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Diagnóstico de arranque y actualización</title></head>
+<body>
+<pre id="out">Cargando…</pre>
+<iframe id="app" src="../index.html" style="width:900px;height:600px;border:1px solid #ccc" title="app"></iframe>
+<script>
+/* Fase 1: la app arranca, el service worker responde con su build.
+   Fase 2: al volver a cargar la página queda controlada y se simula el aviso de
+           versión nueva: la barra aparece, no interrumpe una ficha abierta y
+           vuelve a aparecer al salir de la ficha. */
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const ifr = document.getElementById('app');
+
+async function listo() {
+  for (let i = 0; i < 40; i++) {
+    await esperar(300);
+    const w = ifr.contentWindow;
+    if (w && w.document && w.document.body && w.document.body.dataset.listo === '1') return w;
+  }
+  return ifr.contentWindow;
+}
+
+(async () => {
+  let w = await listo();
+  const errores = [];
+  w.addEventListener('error', (e) => errores.push(e.message));
+  log('fase1 listo      : ' + (w.document.body.dataset.listo || '(no)'));
+  log('fase1 puntos     : ' + w.document.querySelectorAll('#listaPuntos .lp').length);
+  log('fase1 controller : ' + (w.navigator.serviceWorker.controller ? 'sí' : 'no'));
+  if (w.navigator.serviceWorker.controller) {
+    w.navigator.serviceWorker.controller.postMessage({ tipo: 'version' });
+    await esperar(800);
+  }
+  log('fase1 version    : [' + w.document.getElementById('versionInfo').textContent + ']');
+
+  // ---- fase 2: recargar (ya controlada) y simular el aviso ----
+  ifr.src = '../index.html?recarga=2';
+  await esperar(1500);
+  w = await listo();
+  await esperar(600);
+  const barra = w.document.getElementById('updateBar');
+  log('fase2 controller : ' + (w.navigator.serviceWorker.controller ? 'sí' : 'no'));
+  log('fase2 barra ini  : [' + barra.className + ']');
+
+  const avisar = (v) => {
+    w.navigator.serviceWorker.dispatchEvent(new w.MessageEvent('message', { data: { tipo: 'nueva-version', version: v } }));
+  };
+
+  avisar('vNUEVA01');
+  await esperar(400);
+  log('aviso en puntos  : [' + barra.className + '] "' + barra.querySelector('span').textContent + '"');
+
+  // cerrar la barra (más tarde)
+  w.document.getElementById('btnUpdateX').click();
+  await esperar(200);
+  log('tras cerrar      : [' + barra.className + ']');
+
+  // abrir una ficha y avisar otra vez: no debe interrumpir
+  w.document.querySelector('#listaPuntos .lp').click();
+  await esperar(300);
+  w.document.getElementById('shLevantar').click();
+  await esperar(700);
+  const enFicha = !w.document.getElementById('v-ficha').classList.contains('hidden');
+  avisar('vNUEVA02');
+  await esperar(400);
+  log('aviso en ficha   : ficha visible=' + enFicha + ' barra=[' + barra.className + ']');
+
+  // salir de la ficha: debe aparecer el aviso que quedó pendiente
+  w.document.getElementById('btnGuardar') && w.document.getElementById('btnGuardar');
+  w.document.getElementById('btnFichaBack').click();
+  await esperar(600);
+  log('al salir         : [' + barra.className + '] "' + barra.querySelector('span').textContent + '"');
+  // botón manual de la pestaña Respaldo
+  w.document.querySelector('.tabs button[data-tab="respaldo"]').click();
+  await esperar(400);
+  w.document.getElementById('btnBuscar').click();
+  await esperar(2500);
+  log('buscar manual    : "' + w.document.getElementById('toast').textContent + '"');
+
+  log('errores          : ' + JSON.stringify((w.__errs || []).slice(0, 3)) + JSON.stringify(errores.slice(0, 3)));
+  log('— FIN —');
+})();
+</script>
+</body></html>

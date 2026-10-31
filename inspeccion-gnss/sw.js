@@ -1,7 +1,7 @@
 /* Service worker: la app abre y funciona sin conexión.
    - Archivos de la app: caché con actualización en segundo plano.
    - Teselas del mapa satelital: caché con límite (las que ya se vieron o generaron). */
-const VERSION = 'v09961618';
+const VERSION = 'v3a132d37';
 const APP_CACHE = 'ig-app-' + VERSION;
 const TILE_CACHE = 'ig-tiles-v1';
 const MAX_TILES = 3000;
@@ -55,7 +55,16 @@ self.addEventListener('activate', (e) => {
       .then(() => self.clients.claim())
   );
   // avisa a la app para mostrar "Hay una versión nueva"
-  self.clients.matchAll({ type: 'window' }).then((cs) => cs.forEach((c) => c.postMessage({ tipo: 'nueva-version' })));
+  self.clients.matchAll({ type: 'window' }).then((cs) => cs.forEach((c) => c.postMessage({ tipo: 'nueva-version', version: VERSION })));
+});
+
+/* La app puede pedir que se active de inmediato o preguntar qué versión corre. */
+self.addEventListener('message', (e) => {
+  const d = e.data || {};
+  if (d.tipo === 'activar') { self.skipWaiting(); return; }
+  if (d.tipo === 'version' && e.source && e.source.postMessage) {
+    e.source.postMessage({ tipo: 'version', version: VERSION });
+  }
 });
 
 async function trimTiles() {
