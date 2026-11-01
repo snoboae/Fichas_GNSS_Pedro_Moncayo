@@ -604,15 +604,12 @@ const App = (() => {
     S.urls.forEach((u) => URL.revokeObjectURL(u));
     S.urls = [];
     const metas = await Fotos.byFicha(id);
-    const fotosHtml = [];
-    for (const m of metas) {
-      const blob = await Fotos.getBlob(m.id);
-      const url = blob ? URL.createObjectURL(blob) : m.thumb;
-      if (blob) S.urls.push(url);
+    /* se muestran las miniaturas que ya están guardadas; la foto completa se abre al tocar */
+    const fotosHtml = metas.map((m) => {
       const nom = m.tipo === 'extra' ? (m.etiqueta || 'Adicional')
         : m.tipo === 'placa' ? 'Placa' : 'Medición';
-      fotosHtml.push(`<figure><img src="${url}" alt=""><figcaption>${esc(nom)} ${m.orden || ''}</figcaption></figure>`);
-    }
+      return `<figure data-foto-id="${m.id}"><img src="${m.thumb}" alt="" loading="lazy"><figcaption>${esc(nom)} ${m.orden || ''}</figcaption></figure>`;
+    });
     $('d-fotos').innerHTML = fotosHtml.join('') || '<p class="hint">Sin fotografías.</p>';
     $('d-fotosPanel').classList.toggle('hidden', !metas.length);
 
@@ -624,16 +621,10 @@ const App = (() => {
         : 'Todavía no se ha subido a Drive.';
 
     S.miPunto = null;
-    setTimeout(() => montarMapaDetalle(f), 60);
+    $('d-gps').textContent = 'Pulsa "¿A qué distancia estoy?" para medir.';
   }
 
-  function montarMapaDetalle(f) {
-    const el = $('d-map');
-    if (S.mapaDetalle) { try { S.mapaDetalle.remove(); } catch (e) { /* nada */ } S.mapaDetalle = null; }
-    if (!el || el.offsetParent === null) return;
-    S.mapaDetalle = Croquis.mapa(el, f.lat, f.lon, f.codigo);
-    $('d-gps').textContent = 'Activa "Mi ubicación" para ver la distancia al punto.';
-  }
+  /* El detalle ya no dibuja un mapa: el croquis y "Ir al punto" alcanzan y así abre al instante. */
 
   function miUbicacion() {
     const f = S.sel && miFicha(S.sel.id);
@@ -646,11 +637,6 @@ const App = (() => {
       const d = Geo.dist([lat, lon], [f.lat, f.lon]);
       const rumbo = Geo.bearing([lat, lon], [f.lat, f.lon]);
       $('d-gps').innerHTML = `Estás a <b>${d.toFixed(1)} m</b> del punto (rumbo ${rumbo.toFixed(0)}°, precisión ±${Math.round(pos.coords.accuracy)} m).`;
-      if (S.mapaDetalle) {
-        if (!S.miPunto) {
-          S.miPunto = L.circleMarker([lat, lon], { radius: 6, color: '#1f4e9c', fillColor: '#4a90e2', fillOpacity: 1, weight: 2 }).addTo(S.mapaDetalle);
-        } else S.miPunto.setLatLng([lat, lon]);
-      }
     }, (err) => {
       $('d-gps').textContent = 'No se pudo obtener la ubicación: ' + err.message;
     }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
@@ -1148,6 +1134,14 @@ const App = (() => {
       if (borrar) borrarFoto(borrar.dataset.borrar);
     });
     $('visorClose').addEventListener('click', () => { $('visor').classList.add('hidden'); $('visorImg').src = ''; });
+
+    /* en el detalle, tocar una foto abre la versión completa */
+    $('d-fotos').addEventListener('click', async (e) => {
+      const fig = e.target.closest('[data-foto-id]');
+      if (!fig) return;
+      const blob = await Fotos.getBlob(fig.dataset.fotoId);
+      if (blob) verImagen(URL.createObjectURL(blob));
+    });
 
     $('btnDetBack').addEventListener('click', () => { mostrar('puntos'); renderTodo(); });
     $('btnDetPdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));

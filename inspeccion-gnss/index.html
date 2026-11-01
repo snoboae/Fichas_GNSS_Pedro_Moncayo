@@ -216,13 +216,11 @@ addEventListener('unhandledrejection', (e) => {
     <div class="kv2" id="d-datos"></div>
   </div>
   <div class="panel" id="d-mapPanel">
-    <h2>Mapa del punto</h2>
-    <div id="d-map" class="map"></div>
-    <p class="hint" id="d-gps">—</p>
-    <div class="row wrap">
-      <button class="btn small" id="d-miUbicacion">Mi ubicación</button>
+    <div class="bar wrap">
       <button class="btn small" id="d-ir">Ir al punto</button>
+      <button class="btn small" id="d-miUbicacion">¿A qué distancia estoy?</button>
     </div>
+    <p class="hint" id="d-gps">—</p>
   </div>
   <div class="panel" id="d-croquisPanel">
     <h2>Croquis de ubicación</h2>
@@ -350,7 +348,6 @@ addEventListener('unhandledrejection', (e) => {
 <div id="toast" class="toast hidden"></div>
 <div id="busy" class="busy hidden"><div id="busyMsg">Procesando…</div></div>
 
-<script src="lib/leaflet/leaflet.js"></script>
 <script src="lib/jspdf/jspdf.umd.min.js"></script>
 <script src="js/config.js"></script>
 <script src="js/datos.js"></script>

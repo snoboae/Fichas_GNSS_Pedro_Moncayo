@@ -105,6 +105,19 @@ function leerFicha(codigo) {
     log('croquis en la ficha: ' + (f.croquis ? 'guardado (viejo)' : 'no se guarda (viene con la app)'));
   }
   log('aviso de guardado: "' + d.getElementById('toast').textContent + '"');
+  // cuánto tarda abrir "Ver ficha guardada"
+  d.getElementById('btnDetBack').click();
+  await esperar(300);
+  d.querySelector('.combo-item[data-id="RG-51-02-IDA"]').click();
+  await esperar(200);
+  const tD = w.performance.now();
+  d.getElementById('btnVerFicha').click();
+  for (let i = 0; i < 80; i++) {
+    await esperar(50);
+    if (!d.getElementById('v-detalle').classList.contains('hidden') && d.getElementById('d-datos').textContent.length > 20) break;
+  }
+  log('tiempo del detalle: ' + Math.round(w.performance.now() - tD) + ' ms · fotos=' + d.getElementById('d-fotos').children.length);
+  log('sin mapa         : ' + !d.getElementById('d-map'));
   log('errores          : ' + JSON.stringify((w.__errs || []).slice(0, 4)));
   log('— FIN —');
 })();
