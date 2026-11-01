@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Prueba de interfaz 2</title></head>
+<body>
+<pre id="out">Cargando…</pre>
+<iframe id="app" src="../index.html" style="width:1000px;height:700px;border:1px solid #ccc" title="app"></iframe>
+<script>
+/* Comprueba: selector de app de mapas, altura con coma decimal y guardado de la ficha. */
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const ifr = document.getElementById('app');
+
+function leerFicha(codigo) {
+  return new Promise((res) => {
+    const r = indexedDB.open('fichas-gnss');
+    r.onsuccess = () => {
+      const db = r.result;
+      const g = db.transaction('fichas', 'readonly').objectStore('fichas').get(codigo);
+      g.onsuccess = () => { res(g.result || null); db.close(); };
+      g.onerror = () => { res(null); db.close(); };
+    };
+    r.onerror = () => res(null);
+  });
+}
+
+(async () => {
+  let w = ifr.contentWindow;
+  for (let i = 0; i < 40; i++) { await esperar(300); if (w.document.body.dataset.listo === '1') break; }
+  await esperar(400);
+  const d = w.document;
+  log('arranque        : ' + (d.body.dataset.listo || 'no'));
+
+  // ---- 1) selector de app de mapas ----
+  d.getElementById('comboBtn').click();
+  await esperar(250);
+  d.querySelector('.combo-item[data-cod="RG-51-02"]').click();
+  await esperar(300);
+  d.getElementById('btnIr').click();
+  await esperar(400);
+  const nav = d.getElementById('navSheet');
+  const opciones = [...d.querySelectorAll('#navSheet [data-nav]')].map((b) => b.textContent.trim());
+  log('selector de mapas: visible=' + !nav.classList.contains('hidden'));
+  log('opciones         : ' + JSON.stringify(opciones));
+  log('subtítulo        : "' + d.getElementById('navSub').textContent + '"');
+  d.querySelector('#navSheet [data-nav-close]').click();
+  await esperar(300);
+  log('se cierra        : ' + nav.classList.contains('hidden'));
+
+  // ---- 2) altura con coma decimal ----
+  d.getElementById('btnLevantar').click();
+  await esperar(700);
+  const altura = d.getElementById('f-altura');
+  log('altura tipo      : ' + altura.type + ' inputmode=' + altura.getAttribute('inputmode'));
+  d.getElementById('f-receptor').selectedIndex = 1;
+  altura.value = '1,532';
+  altura.dispatchEvent(new w.Event('input', { bubbles: true }));
+  const ini = d.querySelector('[data-ahora="inicio"]');
+  const fin = d.querySelector('[data-ahora="fin"]');
+  ini.click(); await esperar(150);
+  // el fin un minuto después para que la duración no sea 0
+  d.getElementById('f-fin').value = d.getElementById('f-inicio').value.replace(/:(\d\d)$/, (m, mm) => ':' + String((Number(mm) + 5) % 60).padStart(2, '0'));
+  d.getElementById('f-fin').dispatchEvent(new w.Event('change', { bubbles: true }));
+  await esperar(200);
+  log('duración         : ' + d.getElementById('f-dur').value);
+
+  w.confirm = () => true;   // aceptar el aviso de campos faltantes
+  d.getElementById('f-operador').value = 'Operador de prueba';
+  d.getElementById('btnGuardar').click();
+  await esperar(1200);
+  const f = await leerFicha('RG-51-02');
+  log('ficha guardada   : ' + !!f);
+  if (f) {
+    log('altura guardada  : ' + JSON.stringify(f.alturaAntena) + ' (tipo ' + typeof f.alturaAntena + ')');
+    log('inicio / fin     : ' + f.inicio + ' / ' + f.fin + ' · dur=' + f.duracionMin);
+    log('croquis pendiente: ' + !!f.croquisPendiente);
+  }
+  log('aviso de guardado: "' + d.getElementById('toast').textContent + '"');
+  log('errores          : ' + JSON.stringify((w.__errs || []).slice(0, 4)));
+  log('— FIN —');
+})();
+</script>
+</body></html>

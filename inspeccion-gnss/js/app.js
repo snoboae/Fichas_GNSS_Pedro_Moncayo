@@ -20,6 +20,7 @@ const App = (() => {
   const S = {
     fichas: new Map(),
     sel: null,
+    navCod: null,
     editor: null,
     fotosEditor: [],
     mapaDetalle: null,
@@ -158,21 +159,43 @@ const App = (() => {
       : 'Puedes ir al punto o levantar la ficha.';
   }
 
-  /* ---------------- IR AL PUNTO ---------------- */
-  function irAlPunto(codigo) {
+  /* ---------------- IR AL PUNTO (elige la app de mapas) ---------------- */
+  function abrirNav(codigo) {
+    const p = P(codigo); if (!p) return;
+    S.navCod = codigo;
+    // en Android no tiene sentido ofrecer Maps de iPhone
+    $('btnNavApple').classList.toggle('hidden', /Android/i.test(navigator.userAgent));
+    $('navSub').textContent = `${p.c} · ${p.sector}`;
+    $('navSheet').classList.remove('hidden');
+  }
+
+  const cerrarNav = () => $('navSheet').classList.add('hidden');
+
+  function navegar(app, codigo) {
     const p = P(codigo); if (!p) return;
     const { lat, lon } = Geo.puntoLatLon(p);
-    const q = `${lat.toFixed(7)},${lon.toFixed(7)}`;
-    const esAndroid = /Android/i.test(navigator.userAgent);
-    const url = esAndroid
-      ? `geo:${q}?q=${q}(${encodeURIComponent(p.c)})`
-      : isIOS ? `maps://?daddr=${q}&q=${encodeURIComponent(p.c)}` : '';
-    if (url) { try { window.location.href = url; } catch (e) { /* sin app de mapas */ } }
-    if (!esAndroid) {
+    const ll = `${lat.toFixed(7)},${lon.toFixed(7)}`;
+    const etiqueta = encodeURIComponent(p.c);
+    let url;
+    if (app === 'waze') {
+      url = `https://waze.com/ul?ll=${ll}&navigate=yes&zoom=17`;
+    } else if (app === 'apple') {
+      url = isIOS ? `maps://?daddr=${ll}&q=${etiqueta}` : `https://maps.apple.com/?daddr=${ll}&q=${etiqueta}`;
+    } else {
+      url = `https://www.google.com/maps/dir/?api=1&destination=${ll}&travelmode=driving`;
+    }
+    DB.kvSet('nav.ultimo', app).catch(() => {});
+    cerrarNav();
+    if (app === 'apple' && isIOS) {
+      // si no está instalada la app de Apple, se cae al sitio web
+      try { window.location.href = url; } catch (e) { /* nada */ }
       setTimeout(() => {
-        if (document.visibilityState === 'visible') window.open(
-          `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`, '_blank', 'noopener');
+        if (document.visibilityState === 'visible') {
+          window.open(`https://maps.apple.com/?daddr=${ll}&q=${etiqueta}`, '_blank', 'noopener');
+        }
       }, 1200);
+    } else {
+      window.open(url, '_blank', 'noopener');
     }
   }
 
@@ -282,7 +305,7 @@ const App = (() => {
   }
 
   const numero = (v) => {
-    const s = String(v == null ? '' : v).replace(',', '.').trim();
+    const s = String(v == null ? '' : v).replace(/\s/g, '').replace(',', '.').trim();
     if (s === '') return null;
     const n = Number(s);
     return isFinite(n) ? n : null;
@@ -410,6 +433,7 @@ const App = (() => {
     const faltan = [];
     if (!f.receptor) faltan.push('receptor GNSS');
     if (!f.alturaAntena) faltan.push('altura de la antena');
+    else if (f.alturaAntena <= 0 || f.alturaAntena > 10) faltan.push('altura de la antena entre 0 y 10 m');
     if (!f.inicio) faltan.push('inicio (fecha y hora)');
     if (!f.fin) faltan.push('fin (fecha y hora)');
     if (f.inicio && f.fin && duracionMin(f) != null && duracionMin(f) <= 0) faltan.push('fin posterior al inicio');
@@ -1032,7 +1056,9 @@ const App = (() => {
       if (!e.target.closest('#combo')) $('comboPanel').classList.add('hidden');
     });
 
-    $('btnIr').addEventListener('click', () => S.sel && irAlPunto(S.sel));
+    $('btnIr').addEventListener('click', () => S.sel && abrirNav(S.sel));
+    document.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.nav, S.navCod)));
+    document.querySelectorAll('[data-nav-close]').forEach((b) => b.addEventListener('click', cerrarNav));
     $('btnLevantar').addEventListener('click', () => S.sel && abrirFicha(S.sel));
     $('btnVerFicha').addEventListener('click', () => S.sel && verDetalle(S.sel));
     $('btnBorrarFicha').addEventListener('click', () => S.sel && borrarFicha(S.sel));
@@ -1080,7 +1106,7 @@ const App = (() => {
     $('d-del').addEventListener('click', () => S.sel && borrarFicha(S.sel));
     $('d-subir').addEventListener('click', () => S.sel && subirUna(S.sel, false));
     $('d-miUbicacion').addEventListener('click', miUbicacion);
-    $('d-ir').addEventListener('click', () => S.sel && irAlPunto(S.sel));
+    $('d-ir').addEventListener('click', () => S.sel && abrirNav(S.sel));
 
     // Drive (Apps Script)
     $('btnProbar').addEventListener('click', async () => {

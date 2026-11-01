@@ -25,7 +25,7 @@ internet queda guardada en el teléfono y abre **sin conexión**.
 
 1. **Puntos** → *Seleccionar punto* (lista desplegable con los 22 códigos del diseño).
 2. Al elegir un código aparecen las dos opciones:
-   - **IR AL PUNTO** → abre Maps con la ruta al punto.
+   - **IR AL PUNTO** → pregunta con qué app ir (**Google Maps**, **Waze** o **Maps de iPhone**) y abre la ruta.
    - **LEVANTAR FICHA** → abre el formulario con los datos del punto ya llenos.
 3. Se completan los datos de la observación, se toman las fotos y se pulsa **Guardar ficha**.
 4. El punto queda con **✓ verde** en la lista desplegable y en la lista de puntos.
@@ -34,7 +34,7 @@ Campos con candado (🔒) = vienen del diseño de la red y no se pueden editar:
 
 | Se llena automáticamente (solo lectura) | Lo llena el operador en campo |
 |---|---|
-| Código (es el identificador del punto), parroquia, sector/sitio, orden, coordenada X e Y (UTM 17S), materialización | Receptor GNSS, altura de la antena, **inicio** y **fin** (fecha y hora, con botón **Ahora**), operador, fotografía de la medición, fotografía de la placa y fotos adicionales con su nombre |
+| Código (es el identificador del punto), parroquia, sector/sitio, orden, coordenada X e Y (UTM 17S), materialización | Receptor GNSS, altura de la antena (acepta coma o punto), **inicio** y **fin** (fecha y hora, con botón **Ahora**), operador, fotografía de la medición, fotografía de la placa y fotos adicionales con su nombre |
 
 La **fecha de la ficha** es la del inicio de la observación; la duración se calcula sola.
 **Fijo por el TR (no se pide):** posicionamiento **estático diferencial**, máscara **10°**,

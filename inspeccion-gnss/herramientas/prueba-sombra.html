@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Sin difuminado arriba</title></head>
+<body>
+<pre id="out">…</pre>
+<iframe id="app" src="../index.html" style="width:390px;height:800px;border:1px solid #999" title="app"></iframe>
+<script>
+/* Comprueba que la cabecera y los paneles ya no tengan sombra difusa y que el
+   oscurecido del selector de mapas sí se mantenga (ahí sí es deseado). */
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const ifr = document.getElementById('app');
+
+(async () => {
+  const w = ifr.contentWindow;
+  for (let i = 0; i < 40; i++) { await esperar(300); if (w.document.body.dataset.listo === '1') break; }
+  await esperar(400);
+  const d = w.document;
+  const cs = (el) => w.getComputedStyle(el);
+
+  const cab = d.querySelector('.topbar');
+  const panel = d.querySelector('.panel');
+  const boton = d.getElementById('btnIr');           // deshabilitado al inicio
+  const navBg = d.querySelector('.navsel-bg');
+  const navCard = d.querySelector('.navsel-card');
+
+  log('cabecera box-shadow : [' + cs(cab).boxShadow + ']');
+  log('cabecera filtro     : [' + cs(cab).filter + '] backdrop=[' + (cs(cab).backdropFilter || cs(cab).webkitBackdropFilter) + ']');
+  log('cabecera borde      : ' + cs(cab).borderBottomWidth + ' ' + cs(cab).borderBottomStyle);
+  log('panel box-shadow    : [' + cs(panel).boxShadow + ']');
+  log('botón deshabilitado : fondo=[' + cs(boton).backgroundImage.slice(0, 12) + '] filtro=[' + cs(boton).filter + '] borde=' + cs(boton).borderStyle + ' opacidad=' + cs(boton).opacity);
+  log('oscurecido del menú : [' + (navBg ? cs(navBg).backgroundColor : 'sin elemento') + '] blur=[' + (navBg ? (cs(navBg).backdropFilter || 'ninguno') : '-') + ']');
+  log('ventana del menú    : redondeo=' + (navCard ? cs(navCard).borderTopLeftRadius : '-'));
+
+  // abrir el menú para confirmar que el oscurecido aparece solo ahí
+  d.getElementById('comboBtn').click(); await esperar(200);
+  d.querySelector('.combo-item[data-cod="RG-51-02"]').click(); await esperar(250);
+  d.getElementById('btnIr').click(); await esperar(350);
+  log('menú visible        : ' + !d.getElementById('navSheet').classList.contains('hidden'));
+  log('— FIN —');
+})();
+</script>
+</body></html>

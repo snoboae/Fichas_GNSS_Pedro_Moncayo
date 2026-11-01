@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#123a6b">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Fichas GNSS">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -86,10 +86,11 @@ addEventListener('unhandledrejection', (e) => {
 
   <div class="panel">
     <div class="bar wrap">
-      <h2 class="grow">Avance del levantamiento</h2>
+      <h2 class="grow">Avance en este teléfono</h2>
       <span class="pill" id="avancePill">0 / 22</span>
     </div>
     <div class="progress"><div id="progressBar"></div></div>
+    <p class="hint">Cada teléfono cuenta solo las fichas que se guardaron en él.</p>
     <div class="row wrap">
       <button class="btn small" id="btnCsv">Exportar avance (CSV)</button>
       <button class="btn small" id="btnGeo">Exportar puntos (GeoJSON)</button>
@@ -128,7 +129,7 @@ addEventListener('unhandledrejection', (e) => {
       <b>estático diferencial · máscara 10° · intervalo 1 s</b>.</p>
     <div class="form">
       <label class="fld"><span>RECEPTOR GNSS</span><select id="f-receptor"></select></label>
-      <label class="fld"><span>ALTURA DE LA ANTENA (m)</span><input id="f-altura" type="number" inputmode="decimal" step="0.001" min="0" placeholder="Ej. 1.532"></label>
+      <label class="fld"><span>ALTURA DE LA ANTENA (m)</span><input id="f-altura" type="text" inputmode="decimal" autocomplete="off" placeholder="Ej. 1,532 o 1.532"></label>
 
       <div class="fld">
         <span>INICIO (fecha y hora)</span>
@@ -331,6 +332,17 @@ addEventListener('unhandledrejection', (e) => {
   <button data-tab="respaldo">Respaldo</button>
 </nav>
 
+<div id="navSheet" class="navsel hidden">
+  <div class="navsel-bg" data-nav-close></div>
+  <div class="navsel-card">
+    <h3 id="navTitulo">¿Cómo quieres ir al punto?</h3>
+    <p class="pp-sub" id="navSub">—</p>
+    <button class="btn" data-nav="google">Abrir con Google Maps</button>
+    <button class="btn" data-nav="waze">Abrir con Waze</button>
+    <button class="btn" data-nav="apple" id="btnNavApple">Abrir con Maps de iPhone</button>
+    <button class="btn ghost" data-nav-close>Cancelar</button>
+  </div>
+</div>
 <div id="visor" class="visor hidden"><img id="visorImg" alt="Croquis ampliado"><button class="visor-x" id="visorClose">×</button></div>
 <input type="file" id="camPunto" accept="image/*" capture="environment" class="hidden">
 <input type="file" id="camPlaca" accept="image/*" capture="environment" class="hidden">
