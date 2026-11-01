@@ -46,6 +46,32 @@ const PUNTOS = [
 ];
 
 /* Materializaciones que ofrece la ficha (el diseño se propone, la ficha registra lo ejecutado). */
+/* Plan de levantamiento: cada punto se observa dos veces.
+   ida    = primera observación, en el orden del recorrido.
+   vuelta = segunda observación, de regreso.
+   Los puntos que no están en estas listas se pueden levantar igual: la app los
+   muestra al final del desplegable como "sin ruta asignada". */
+const RUTA = {
+  ida: ['RG-52-02', 'RG-52-01', 'RG-53-03', 'RG-52-04', 'RG-53-04', 'RG-53-02',
+        'RG-51-02', 'RG-51-01', 'RG-53-01', 'RG-51-03', 'RG-50-04', 'RG-50-05',
+        'RG-50-03', 'RG-54-04', 'RG-50-02', 'RG-54-03', 'RG-54-02', 'RG-54-01'],
+  vuelta: ['RG-54-03', 'RG-54-01', 'RG-54-02', 'RG-50-03', 'RG-50-02', 'RG-54-04',
+           'RG-51-03', 'RG-50-05', 'RG-50-04', 'RG-53-01', 'RG-51-02', 'RG-51-01',
+           'RG-53-02', 'RG-52-04', 'RG-53-04', 'RG-53-03', 'RG-52-01', 'RG-52-02'],
+  /* Primer orden: base 8 h cada día (1 a 6). Cada jornada lleva su ficha porque la
+     altura de la antena se mide de nuevo (trípode, altura inclinada). */
+  base: ['RG-52-03', 'RG-50-01', 'RG-50-06'],
+  diasBase: 6,
+  /* Punto adicional no fiscalizado: una sola medición, junto a las bases. */
+  unica: ['RG-SF-51-01']
+};
+
+/* Grupos de trabajo: se usan para ordenar las carpetas en Google Drive. */
+const GRUPOS = {
+  base: '1. PRIMER ORDEN',
+  movil: '2. SEGUNDO Y TERCER ORDEN',
+  unica: '3. PUNTO ADICIONAL'
+};
 const MATERIALIZACIONES = ['Mojón Tipo A', 'Mojón Tipo B', 'Placa 12 cm', 'Placa 5 cm', 'Otro'];
 
 /* Receptores GNSS disponibles en el equipo de campo. */

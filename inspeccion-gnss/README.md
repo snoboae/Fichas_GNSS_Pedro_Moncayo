@@ -23,12 +23,30 @@ internet queda guardada en el teléfono y abre **sin conexión**.
 
 ## 1. Cómo se usa en campo
 
-1. **Puntos** → *Seleccionar punto* (lista desplegable con los 22 códigos del diseño).
-2. Al elegir un código aparecen las dos opciones:
-   - **IR AL PUNTO** → pregunta con qué app ir (**Google Maps**, **Waze** o **Maps de iPhone**) y abre la ruta.
-   - **LEVANTAR FICHA** → abre el formulario con los datos del punto ya llenos.
-3. Se completan los datos de la observación, se toman las fotos y se pulsa **Guardar ficha**.
-4. El punto queda con **✓ verde** en la lista desplegable y en la lista de puntos.
+Cada punto se levanta **dos veces**: la **IDA** (primera observación, en el orden del recorrido) y la
+**VUELTA** (segunda observación, de regreso). Son **55 fichas planificadas**:
+
+- **36** de los 18 puntos de segundo y tercer orden (ida y vuelta, 3 puntos por sesión de 2 h).
+- **18** de los tres de primer orden (`RG-52-03`, `RG-50-01`, `RG-50-06`): **una ficha por jornada**
+  de ocupación como base 8 h (6 jornadas × 3 bases), porque la altura de la antena se mide de nuevo
+  cada vez (trípode, altura inclinada). Si la campaña se alarga, la app ofrece la jornada siguiente
+  (**BASE 7**, **BASE 8**…) sin tener que cambiar nada.
+- **1** de `RG-SF-51-01`, que se mide una sola vez (junto a las bases).
+
+> **Los días del plan son tentativos.** La app no amarra ningún punto a una fecha: los números
+> (1…18) son el orden del recorrido y las **jornadas** (BASE 1, BASE 2…) son la cantidad de veces
+> que se ocupó esa base, no días del calendario. La carpeta en Drive usa la **fecha real** de la
+> ficha, y cualquier punto se puede levantar en cualquier orden: si la campaña se corre un día, no
+> hay que cambiar nada.
+
+El desplegable **Puntos** muestra las 44 fichas posibles, en el orden del recorrido y con su etiqueta
+**IDA** o **VUELTA** y el número de la ruta (1…18). Las que ya están guardadas llevan **✓ verde**.
+
+1. Elegir **Puntos** → abrir el desplegable → elegir, por ejemplo, `3 · RG-53-03 · IDA`.
+2. **IR AL PUNTO** pregunta con qué app ir (**Google Maps**, **Waze** o **Maps de iPhone**).
+3. **LEVANTAR FICHA** abre la ficha de esa sesión (la IDA y la VUELTA son fichas distintas).
+4. Llenar los datos y **Guardar ficha**.
+5. El punto queda con **✓ verde** para esa sesión; el panel muestra también si la otra sesión ya está.
 
 Campos con candado (🔒) = vienen del diseño de la red y no se pueden editar:
 
@@ -37,28 +55,30 @@ Campos con candado (🔒) = vienen del diseño de la red y no se pueden editar:
 | Código (es el identificador del punto), parroquia, sector/sitio, orden, coordenada X e Y (UTM 17S), materialización | Receptor GNSS, altura de la antena (acepta coma o punto), **inicio** y **fin** (fecha y hora, con botón **Ahora**), operador, fotografía de la medición, fotografía de la placa y fotos adicionales con su nombre |
 
 La **fecha de la ficha** es la del inicio de la observación; la duración se calcula sola.
-**Fijo por el TR (no se pide):** posicionamiento **estático diferencial**, máscara **10°**,
-intervalo **1 s**. La app lo imprime en la ficha.
 
+**Fijo por el TR (no se pide):** método *estático diferencial*, máscara de 10° e intervalo de 1 s.
+
+> El **avance** que muestra la app es el de **ese teléfono**. Para saber el avance de todo el equipo se
+> usan las fichas subidas a Drive (o el CSV de cada teléfono).
 ## 2. Croquis
 
-Se arma automáticamente con la **imagen satelital Esri** (World Imagery) centrada en el punto, con
-el punto marcado, norte, escala gráfica, código y coordenadas UTM.
+Los **22 croquis ya vienen generados con la app**, en `img/croquis/<código>.jpg` (imagen satelital
+Esri, cruz en el punto, código y coordenadas UTM, norte, escala y atribución). Por eso:
+
+- **No hay que generarlos** en campo ni en oficina, y **no necesitan internet**.
+- Se guardan en el service worker, así que también funcionan sin conexión.
+- La ficha y el PDF los usan directamente; no se guardan dentro de cada ficha (así las fichas
+  pesan menos).
+
+Si algún día cambian las coordenadas del diseño, se regeneran todos en un minuto:
+
+```
+python herramientas/genera_croquis.py            # los 22
+python herramientas/genera_croquis.py RG-52-02   # solo uno
+```
 
 > En el cantón Pedro Moncayo Esri entrega imagen hasta el **zoom 18**; en el 19 responde con la
-> tesela "Map data not yet available". La app lo detecta y usa solo la imagen real.
-
-**Se completa solo si falta:** si una ficha se guarda sin croquis (por falta de señal), la app la
-marca como *sin croquis* y lo genera automáticamente cuando vuelve el internet (al abrir la app o
-al recuperar conexión), sin que el operador haga nada. La ficha se vuelve a marcar como pendiente
-de subir, para que el PDF que llegue a Drive ya tenga el croquis.
-
-### Preparar los croquis en oficina (recomendado antes de salir a campo)
-
-En **Puntos → "Preparar croquis de los 22 puntos"** la app genera y guarda el croquis de todos los
-puntos de una vez (~1 segundo por punto). Después, al abrir una ficha **sin internet**, el croquis
-ya está listo.
-
+> tesela "Map data not yet available". El generador lo detecta y no deja huecos.
 ## 3. Fotografías
 
 En la ficha hay tres bloques:
@@ -96,15 +116,30 @@ que crear proyecto en Google Cloud, no hay pantalla de permisos de Google y no c
 ### Qué se crea en Drive
 
 ```
-Inspección GNSS - Pedro Moncayo/           ← la crea el script en el Drive del dueño
-   2026-10-31/                             ← una carpeta por día de observación
-      RG-50-01/
-         RG-50-01.pdf                      ← la ficha de una hoja
-         RG-50-01_punto_1.jpg              ← fotografías en resolución original
-         RG-50-01_punto_2.jpg
-         RG-50-01_placa_1.jpg
-         datos_RG-50-01.json               ← todos los datos de la ficha
-```
+Inspección GNSS - Pedro Moncayo/          ← la crea el script en el Drive del dueño
+   2026_10_31/                            ← carpeta del día (la crea el script si no existe)
+      IDA_31_10_2026_RG-52-02/            ← una carpeta por ficha: TIPO_dd_mm_aaaa_CÓDIGO
+         RG-52-02_IDA.pdf
+         RG-52-02_IDA_medicion_1.jpg
+         RG-52-02_IDA_medicion_2.jpg
+         RG-52-02_IDA_placa_1.jpg
+         RG-52-02_IDA_acceso_vehicular_1.jpg
+         datos_RG-52-02_IDA.json
+      BASE3_31_10_2026_RG-50-01/          ← las bases llevan el número de jornada
+         RG-50-01_BASE-3.pdf
+   2026_11_15/
+      VUELTA_15_11_2026_RG-53-01/
+`
+
+Dos niveles: **día** (aaa_mm_dd) y **ficha** (TIPO[jornada]_dd_mm_aaaa_CÓDIGO). El nombre sale
+del tipo de ficha, la **fecha de la ficha** (la misma del PDF) y el código. Antes de crear cada
+carpeta el script **busca por nombre**: si ya existe la reutiliza (aunque se haya movido a mano), de
+modo que nunca se duplican carpetas del mismo día.
+El nombre sale del **tipo de ficha** (IDA, VUELTA, BASE o UNICA), la **fecha de la ficha** (la misma
+del PDF) y el **código**. La app no arma carpetas por día: esas las crea usted en Drive y **arrastra
+cada carpeta** a la del día que corresponda. Si la carpeta ya fue movida y se vuelve a subir la
+misma ficha, el script la busca y la reutiliza (no crea una copia).
+
 
 Si un archivo ya existe con ese nombre, el anterior se envía a la papelera y se crea el nuevo (no
 se duplica). Si la ficha cambia después de subida, vuelve a quedar como *pendiente*.
@@ -236,7 +271,7 @@ contenido). Con eso el teléfono sabe que hay algo nuevo:
 | `js/datos.js` | **los 22 puntos** (código, orden, parroquia, sitio, UTM, materialización, trabajos, notas). Generado por `herramientas/genera_datos.py` |
 | `js/config.js` | ajustes de arranque (URL y clave del script de Drive, versión, tamaños de foto) |
 | `js/geo.js` | UTM ↔ geográficas (WGS84), distancias y rumbos |
-| `js/mapimg.js` | croquis satelital Esri + mapa interactivo |
+| `js/mapimg.js` | mapa interactivo del detalle (los croquis son archivos en `img/croquis/`) |
 | `js/fotos.js` | compresión, originales, miniaturas |
 | `js/pdf.js` | la ficha de una hoja |
 | `js/drive.js` | envío de archivos al script de Apps Script |

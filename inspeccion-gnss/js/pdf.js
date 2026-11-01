@@ -162,8 +162,24 @@ const PDF = (() => {
 
     /* placa del código: con alto suficiente para que el código no toque el borde */
     const pw = 46, px = PW - M - pw, py = by + 1.2, ph = bh - 2.4;
+
+    /* tipo de levantamiento: IDA o VUELTA */
+    const tipoFicha = String(f.tipo || 'ida').toLowerCase();
+    const chip = tipoFicha === 'vuelta' ? 'VUELTA'
+      : tipoFicha === 'base' ? ('BASE ' + (f.dia || 1))
+        : tipoFicha === 'unica' ? 'ÚNICA' : 'IDA';
+    const chipW = tipoFicha === 'base' ? 30 : 24, chipH = 6.4;
+    const chipX = px - chipW - 4, chipY = by + (bh - chipH) / 2;
+    /* la base va en claro porque la banda es azul marino */
+    const chipFondo = tipoFicha === 'vuelta' ? [214, 122, 12]
+      : tipoFicha === 'base' ? [226, 236, 248]
+        : tipoFicha === 'unica' ? [70, 90, 110] : [32, 118, 62];
+    const chipTexto = tipoFicha === 'base' ? [18, 58, 107] : [255, 255, 255];
+    doc.setFillColor(...chipFondo);
+    doc.roundedRect(chipX, chipY, chipW, chipH, 1.4, 1.4, 'F');
+    txt(doc, chip, chipX + chipW / 2, chipY + chipH / 2 + 1.2, { size: 7.6, bold: true, color: chipTexto, align: 'center' });
     doc.setFillColor(255, 255, 255); doc.rect(px, py, pw, ph, 'F');
-    txt(doc, 'CÓDIGO / NOMINATIVO', px + 2.6, py + 2.7, { size: 5.1, bold: true, color: GRAY });
+    txt(doc, 'CÓDIGO · ' + chip, px + 2.6, py + 2.7, { size: 5.1, bold: true, color: GRAY });
     txt(doc, f.codigo || '—', px + 2.6, py + 6.9, { size: 10.2, bold: true, color: NAVY });
 
     return 29.9;
@@ -221,7 +237,7 @@ const PDF = (() => {
   }
 
   /* ---------------- documento ---------------- */
-  function fichaDoc(f, fotos) {
+  function fichaDoc(f, fotos, croquis) {
     const doc = nuevo();
     const log = (tag, y) => { if (globalThis.PDF_DEBUG) console.log(tag, y.toFixed(1)); };
 
@@ -236,8 +252,7 @@ const PDF = (() => {
     const xR = M + wCro + 5, wR = CW - wCro - 5;
 
     seccion(doc, '3', 'Croquis de ubicación', ySec, M, wCro);
-    imagen(doc, M, yImg, wCro, hImg, f.croquis, Croquis.W, Croquis.H, '',
-      'Croquis pendiente.\nSe completa solo cuando haya internet.');
+    imagen(doc, M, yImg, wCro, hImg, croquis && croquis.dataUrl, Croquis.W, Croquis.H, '', 'Sin croquis');
 
     const lista = fotos || [];
     const conPunto = lista.find((p) => p.tipo === 'punto');

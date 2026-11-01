@@ -29,11 +29,19 @@ function leerFicha(codigo) {
   await esperar(400);
   const d = w.document;
   log('arranque        : ' + (d.body.dataset.listo || 'no'));
+  const items = [...d.querySelectorAll('.combo-item')];
+  log('total de sesiones: ' + items.length + ' (' + items.filter((x) => x.querySelector('.tipo.ida')).length + ' IDA / ' + items.filter((x) => x.querySelector('.tipo.vuelta')).length + ' VUELTA)');
+  log('numeración      : ' + items.slice(0, 3).map((x) => x.querySelector('.num').textContent + ':' + x.dataset.id).join(' | '));
+  log('sin ruta        : ' + [...d.querySelectorAll('.combo-sep')].map((x) => x.textContent).join(' / '));
+  const base = items.filter((x) => /BASE/.test(x.textContent));
+  log('jornadas de base: ' + base.length + ' · primera=' + (base[0] ? base[0].dataset.id : '-') + ' · etiqueta=' + (base[0] ? base[0].querySelector('.tipo').textContent : '-'));
+  log('bases sin ruta  : ' + items.filter((x) => /BASE/.test(x.dataset.id)).map((x) => x.dataset.id).filter((id) => !/-BASE-\\d+$/.test(id)).join(',') || 'ninguna');
+  log('avance inicial  : ' + d.getElementById('avancePill').textContent);
 
   // ---- 1) selector de app de mapas ----
   d.getElementById('comboBtn').click();
   await esperar(250);
-  d.querySelector('.combo-item[data-cod="RG-51-02"]').click();
+  d.querySelector('.combo-item[data-id="RG-51-02-IDA"]').click();
   await esperar(300);
   d.getElementById('btnIr').click();
   await esperar(400);
@@ -51,14 +59,21 @@ function leerFicha(codigo) {
   await esperar(700);
   const altura = d.getElementById('f-altura');
   log('altura tipo      : ' + altura.type + ' inputmode=' + altura.getAttribute('inputmode'));
+  const previa = d.getElementById('croquisImg');
+  await esperar(600);
+  log('croquis en ficha : src=' + (previa.getAttribute('src') || '') + ' cargada=' + (previa.naturalWidth > 0) + ' (' + previa.naturalWidth + 'x' + previa.naturalHeight + ')');
+  log('sin botones croq : generar=' + !d.getElementById('btnCroquis') + ' preparar=' + !d.getElementById('btnPrepCroquis'));
   d.getElementById('f-receptor').selectedIndex = 1;
   altura.value = '1,532';
   altura.dispatchEvent(new w.Event('input', { bubbles: true }));
   const ini = d.querySelector('[data-ahora="inicio"]');
   const fin = d.querySelector('[data-ahora="fin"]');
   ini.click(); await esperar(150);
-  // el fin un minuto después para que la duración no sea 0
-  d.getElementById('f-fin').value = d.getElementById('f-inicio').value.replace(/:(\d\d)$/, (m, mm) => ':' + String((Number(mm) + 5) % 60).padStart(2, '0'));
+  // el fin 5 minutos después (con hora, para que no cruce la medianoche al revés)
+  const t0 = new Date(d.getElementById('f-inicio').value);
+  t0.setMinutes(t0.getMinutes() + 5);
+  const p2 = (x) => String(x).padStart(2, '0');
+  d.getElementById('f-fin').value = t0.getFullYear() + '-' + p2(t0.getMonth() + 1) + '-' + p2(t0.getDate()) + 'T' + p2(t0.getHours()) + ':' + p2(t0.getMinutes());
   d.getElementById('f-fin').dispatchEvent(new w.Event('change', { bubbles: true }));
   await esperar(200);
   log('duración         : ' + d.getElementById('f-dur').value);
@@ -67,12 +82,12 @@ function leerFicha(codigo) {
   d.getElementById('f-operador').value = 'Operador de prueba';
   d.getElementById('btnGuardar').click();
   await esperar(1200);
-  const f = await leerFicha('RG-51-02');
+  const f = await leerFicha('RG-51-02-IDA');
   log('ficha guardada   : ' + !!f);
   if (f) {
     log('altura guardada  : ' + JSON.stringify(f.alturaAntena) + ' (tipo ' + typeof f.alturaAntena + ')');
     log('inicio / fin     : ' + f.inicio + ' / ' + f.fin + ' · dur=' + f.duracionMin);
-    log('croquis pendiente: ' + !!f.croquisPendiente);
+    log('croquis en la ficha: ' + (f.croquis ? 'guardado (viejo)' : 'no se guarda (viene con la app)'));
   }
   log('aviso de guardado: "' + d.getElementById('toast').textContent + '"');
   log('errores          : ' + JSON.stringify((w.__errs || []).slice(0, 4)));

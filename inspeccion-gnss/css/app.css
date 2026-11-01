@@ -125,7 +125,7 @@ main { max-width: 900px; margin: 0 auto; padding: 12px 14px 20px; }
 .combo-q { width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 12px 12px; font: inherit; font-size: 15px; background: var(--surface); color: var(--ink); }
 .combo-list { max-height: 52vh; overflow: auto; -webkit-overflow-scrolling: touch; }
 .combo-item {
-  display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 8px;
+  display: grid; grid-template-columns: 16px 20px minmax(0, 1fr); align-items: center; gap: 8px;
   width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent;
   color: var(--ink); font: inherit; text-align: left; padding: 10px 12px; cursor: pointer;
 }
@@ -303,3 +303,21 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
 .navsel-card h3 { margin: 0; font-size: 16px; color: var(--brand); }
 .navsel-card .pp-sub { margin: 0 0 4px; }
 .navsel-card .btn { width: 100%; }
+/* etiqueta IDA / VUELTA */
+.tipo { display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .6px; padding: 2px 7px; border-radius: 999px; vertical-align: 1px; }
+.tipo.ida { background: #dcefd9; color: #1e6b32; }
+.tipo.vuelta { background: #ffe3c2; color: #8a4b00; }
+.tipo.unica { background: #dde6ef; color: #33506b; }
+.tipo.base { background: #d6e2f2; color: #14325c; }
+@media (prefers-color-scheme: dark) {
+  .tipo.ida { background: #14371f; color: #8ee0a4; }
+  .tipo.vuelta { background: #3a2a12; color: #ffc266; }
+  .tipo.unica { background: #1e2b38; color: #a8c4dd; }
+  .tipo.base { background: #16263c; color: #9fc2ee; }
+}
+.combo-item .num { font-size: 12px; font-weight: 800; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.combo-item .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.combo-sep {
+  font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: var(--muted);
+  padding: 12px 12px 5px; background: var(--bg); border-bottom: 1px solid var(--line);
+}

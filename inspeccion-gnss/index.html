@@ -94,9 +94,7 @@ addEventListener('unhandledrejection', (e) => {
     <div class="row wrap">
       <button class="btn small" id="btnCsv">Exportar avance (CSV)</button>
       <button class="btn small" id="btnGeo">Exportar puntos (GeoJSON)</button>
-      <button class="btn small" id="btnPrepCroquis">Preparar croquis de los 22 puntos</button>
     </div>
-    <p class="hint" id="croquisPrepMsg">Genera de una vez los croquis de todos los puntos: hazlo en oficina, con wifi, y en campo no hará falta internet para la ficha.</p>
   </div>
 </section>
 
@@ -154,16 +152,13 @@ addEventListener('unhandledrejection', (e) => {
 
   <div class="panel">
     <h2>Croquis de ubicación</h2>
-    <p class="hint">Se arma con la imagen satelital Esri centrada en el punto. Si no hay internet, el croquis se completa solo después: la ficha se guarda igual.</p>
+    <p class="hint">El croquis del punto ya viene con la app (imagen satelital Esri). No hay que generarlo ni hace falta internet.</p>
     <div id="croquisBox" class="croquisbox">
-      <div class="croquis-empty" id="croquisEmpty">Sin croquis todavía</div>
-      <img id="croquisImg" class="hidden" alt="Croquis de ubicación del punto">
+      <img id="croquisImg" alt="Croquis de ubicación del punto">
     </div>
     <div class="row wrap">
-      <button class="btn" id="btnCroquis">Generar croquis</button>
       <button class="btn small" id="btnVerCroquis">Ampliar</button>
     </div>
-    <p class="hint" id="croquisMsg"></p>
   </div>
 
   <div class="panel">
@@ -229,7 +224,7 @@ addEventListener('unhandledrejection', (e) => {
       <button class="btn small" id="d-ir">Ir al punto</button>
     </div>
   </div>
-  <div class="panel hidden" id="d-croquisPanel">
+  <div class="panel" id="d-croquisPanel">
     <h2>Croquis de ubicación</h2>
     <div class="preview"><img id="d-croquis" alt="Croquis"></div>
   </div>

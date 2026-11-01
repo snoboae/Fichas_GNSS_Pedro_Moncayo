@@ -8,10 +8,10 @@
  *  Recibe un archivo (PDF, foto o JSON) desde la app y lo guarda en el Drive del
  *  dueño de este script, con esta estructura:
  *
- *      <CARPETA_RAIZ>/2026-10-31/RG-50-01/RG-50-01.pdf
- *      <CARPETA_RAIZ>/2026-10-31/RG-50-01/RG-50-01_punto_1.jpg
- *      <CARPETA_RAIZ>/2026-10-31/RG-50-01/RG-50-01_placa_1.jpg
- *      <CARPETA_RAIZ>/2026-10-31/RG-50-01/datos_RG-50-01.json
+ *      <CARPETA_RAIZ>/2026_10_31/BASE3_31_10_2026_RG-50-01/RG-50-01_BASE-3.pdf
+ *      <CARPETA_RAIZ>/2026_10_31/IDA_31_10_2026_RG-52-02/RG-52-02_IDA.pdf
+ *      <CARPETA_RAIZ>/2026_11_15/VUELTA_15_11_2026_RG-53-01/RG-53-01_VUELTA_medicion_1.jpg
+ *      <CARPETA_RAIZ>/2026_10_31/IDA_31_10_2026_RG-52-02/datos_RG-52-02_IDA.json
  *
  *  CÓMO SE INSTALA (una sola vez)
  *  1. Entra a https://script.google.com con la cuenta dueña de la carpeta.
@@ -71,20 +71,22 @@ function doPost(e) {
     if (j.op !== 'subir') return json({ ok: false, error: 'op' });
     if (!j.nombre || !j.datos) return json({ ok: false, error: 'datos' });
 
-    var dia = carpeta(String(j.dia || hoy()), carpetaRaiz());
-    var punto = carpeta(String(j.punto || 'sin-codigo'), dia);
+    // Dos niveles: <raíz>/<aaaa_mm_dd>/<TIPO[jornada]_dd_mm_aaaa_CÓDIGO>/
+    // Antes de crear cada carpeta se busca por nombre; nunca se duplica.
+    var dia = carpetaDe(String(j.dia || hoy().replace(/-/g, '_')), carpetaRaiz());
+    var carpetaFicha = carpetaDeFicha(String(j.carpeta || 'sin-codigo'), dia);
     var bytes = Utilities.base64Decode(j.datos);
     var blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', j.nombre);
 
     // Si ya existe un archivo con ese nombre, se manda a la papelera (no se duplica).
     var reemplazado = false;
-    var it = punto.getFilesByName(j.nombre);
+    var it = carpetaFicha.getFilesByName(j.nombre);
     while (it.hasNext()) { it.next().setTrashed(true); reemplazado = true; }
 
-    var f = punto.createFile(blob);
+    var f = carpetaFicha.createFile(blob);
     return json({
       ok: true, id: f.getId(), nombre: f.getName(), bytes: bytes.length,
-      reemplazado: reemplazado, dia: dia.getName(), punto: punto.getName(), url: f.getUrl()
+      reemplazado: reemplazado, dia: dia.getName(), carpeta: carpetaFicha.getName(), url: f.getUrl()
     });
   } catch (err) {
     return json({ ok: false, error: mensaje(err) });
@@ -98,6 +100,27 @@ function carpeta(nombre, padre) {
   var it = padre ? padre.getFoldersByName(nombre) : DriveApp.getFoldersByName(nombre);
   if (it.hasNext()) return it.next();
   return padre ? padre.createFolder(nombre) : DriveApp.createFolder(nombre);
+}
+
+/* Devuelve la carpeta con ese nombre dentro de "padre"; si no existe, la crea.
+   Nunca duplica: siempre se busca primero (y devuelve la primera si hubiera varias). */
+function carpetaDe(nombre, padre) {
+  var it = padre.getFoldersByName(nombre);
+  if (it.hasNext()) return it.next();
+  return padre.createFolder(nombre);
+}
+
+/* Carpeta de la ficha dentro de la carpeta del día. Si por algún motivo ya existe en la
+   raíz o se movió a mano, se reutiliza en vez de crear otra. */
+function carpetaDeFicha(nombre, dia) {
+  var enDia = dia.getFoldersByName(nombre);
+  if (enDia.hasNext()) return enDia.next();
+  var raiz = carpetaRaiz();
+  var enRaiz = raiz.getFoldersByName(nombre);
+  if (enRaiz.hasNext()) return enRaiz.next();
+  var buscar = DriveApp.searchFolders('title = "' + String(nombre).replace(/"/g, '') + '" and trashed = false');
+  if (buscar.hasNext()) return buscar.next();
+  return dia.createFolder(nombre);
 }
 
 function cuenta() {

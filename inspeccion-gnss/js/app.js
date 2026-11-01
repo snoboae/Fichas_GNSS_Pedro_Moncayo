@@ -1,4 +1,4 @@
-/* Lógica de la app: selección de puntos, ficha de campo, croquis, PDF,
+/* Lógica de la app: selección de puntos, ficha de campo (ida y vuelta), PDF,
    subida a Drive (Apps Script) y respaldo. */
 const App = (() => {
   const $ = (id) => document.getElementById(id);
@@ -16,10 +16,58 @@ const App = (() => {
   const MASCARA = 10;
   const INTERVALO = 1;
 
+  /* ---------------- ida y vuelta ---------------- */
+  const TIPOS = { ida: 'IDA', vuelta: 'VUELTA', base: 'BASE', unica: 'ÚNICA' };
+  /* id de la ficha: RG-52-02-IDA · RG-52-02-VUELTA · RG-50-01-BASE-D3 · RG-SF-51-01-UNICA */
+  const idFicha = (codigo, tipo, jornada) => `${codigo}-${String(tipo).toUpperCase()}` +
+    (String(tipo).toLowerCase() === 'base' ? `-${jornada || 1}` : '');
+  const nRuta = (codigo, tipo) => {
+    const lista = (typeof RUTA !== 'undefined' && RUTA[tipo]) || [];
+    const i = lista.indexOf(codigo);
+    return i < 0 ? null : i + 1;
+  };
+
+  /* todas las fichas posibles: primero las planificadas (en orden de recorrido) y
+     después las de los puntos que no están en la ruta, para no dejar ninguno fuera */
+  function sesiones() {
+    const out = [];
+    const plan = (typeof RUTA !== 'undefined') ? RUTA : { ida: [], vuelta: [] };
+    ['ida', 'vuelta'].forEach((tipo) => {
+      (plan[tipo] || []).forEach((codigo, i) => out.push({ id: idFicha(codigo, tipo), codigo, tipo, n: i + 1, plan: true }));
+    });
+    /* Bases de primer orden: una ficha por jornada de ocupación. Las jornadas son
+       tentativas: se muestran las previstas y una más, para poder agregar la siguiente
+       cuando el trabajo se alargue. */
+    const diasBase = plan.diasBase || 6;
+    (plan.base || []).forEach((codigo) => {
+      const hechas = Array.from(S.fichas.keys())
+        .map((id) => { const m = new RegExp('^' + codigo + '-BASE-(\\d+)$').exec(id); return m ? Number(m[1]) : 0; })
+        .filter((n) => n > 0);
+      const ultima = hechas.length ? Math.max.apply(null, hechas) : 0;
+      const total = Math.max(diasBase, ultima + 1);
+      for (let j = 1; j <= total; j++) {
+        out.push({ id: idFicha(codigo, 'base', j), codigo, tipo: 'base', dia: j, n: null, plan: true, rol: 'base' });
+      }
+    });
+    /* punto adicional: una sola medición */
+    (plan.unica || []).forEach((codigo) => {
+      out.push({ id: idFicha(codigo, 'unica'), codigo, tipo: 'unica', n: null, plan: true, rol: 'unica' });
+    });
+    const enRuta = new Set([].concat(plan.ida || [], plan.vuelta || [], plan.base || [], plan.unica || []));
+    PUNTOS.forEach((p) => {
+      if (enRuta.has(p.c)) return;
+      ['ida', 'vuelta'].forEach((tipo) => out.push({ id: idFicha(p.c, tipo), codigo: p.c, tipo, n: null, plan: false }));
+    });
+    return out;
+  }
+  const planificadas = () => (typeof RUTA === 'undefined' ? 0
+    : (RUTA.ida || []).length + (RUTA.vuelta || []).length
+      + (RUTA.base || []).length * (RUTA.diasBase || 6) + (RUTA.unica || []).length);
+
   /* ---------------- estado ---------------- */
   const S = {
     fichas: new Map(),
-    sel: null,
+    sel: null,          // { id, codigo, tipo, n }
     navCod: null,
     editor: null,
     fotosEditor: [],
@@ -31,7 +79,7 @@ const App = (() => {
   };
 
   const P = (codigo) => PUNTOS.find((p) => p.c === codigo) || null;
-  const guardada = (codigo) => S.fichas.get(codigo) || null;
+  const miFicha = (id) => S.fichas.get(id) || null;
 
   /* ---------------- avisos ---------------- */
   let toastT = null;
@@ -69,6 +117,8 @@ const App = (() => {
   }
 
   /* ---------------- vistas ---------------- */
+  let actualizacionPendiente = false;
+
   function mostrar(v) {
     if (v !== 'detalle' && S.watchGps != null) {
       try { navigator.geolocation.clearWatch(S.watchGps); } catch (e) { /* nada */ }
@@ -77,93 +127,105 @@ const App = (() => {
     ['puntos', 'ficha', 'detalle', 'drive', 'respaldo'].forEach((k) => $('v-' + k).classList.toggle('hidden', k !== v));
     document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on',
       b.dataset.tab === (v === 'detalle' || v === 'ficha' ? 'puntos' : v)));
-    // si quedó una actualización pendiente y ya no hay una ficha abierta, se avisa
     if (v !== 'ficha' && actualizacionPendiente) $('updateBar').classList.remove('hidden');
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   /* ---------------- puntos ---------------- */
-  function puntosFiltrados(q) {
-    const t = String(q || '').toLowerCase().trim();
-    const base = PUNTOS.slice();
-    if (!t) return base;
-    return base.filter((p) => [p.c, p.parroquia, p.sector].join(' ').toLowerCase().includes(t));
-  }
-
-  const ORDEN_PARROQUIA = ['Tabacundo', 'La Esperanza', 'Malchingui', 'Tocachi', 'Tupigachi'];
-  const ordenParr = (p) => { const i = ORDEN_PARROQUIA.indexOf(p.parroquia); return i < 0 ? 99 : i; };
+  const badge = (tipo, dia) => `<span class="tipo ${tipo}">${TIPOS[tipo] || tipo}` +
+  (String(tipo).toLowerCase() === 'base' ? ` ${dia || 1}` : '') + '</span>';
 
   function renderCombo() {
-    const lista = puntosFiltrados($('comboQ').value)
-      .sort((a, b) => (ordenParr(a) - ordenParr(b)) || a.c.localeCompare(b.c));
-    $('comboList').innerHTML = lista.map((p) => {
-      const ok = !!guardada(p.c);
-      return `<button type="button" class="combo-item${ok ? ' saved' : ''}${S.sel === p.c ? ' sel' : ''}" data-cod="${esc(p.c)}" role="option">
+    const q = String($('comboQ').value || '').toLowerCase().trim();
+    const lista = sesiones().filter((s) => {
+      if (!q) return true;
+      const p = P(s.codigo) || {};
+      return [s.codigo, TIPOS[s.tipo], p.parroquia, p.sector].join(' ').toLowerCase().includes(q);
+    });
+    let html = '';
+    let separador = false;
+    for (const s of lista) {
+      if (!s.plan && !separador) { separador = true; html += '<div class="combo-sep">Sin ruta asignada</div>'; }
+      const p = P(s.codigo) || {};
+      const ok = !!miFicha(s.id);
+      html += `<button type="button" class="combo-item${ok ? ' saved' : ''}${S.sel && S.sel.id === s.id ? ' sel' : ''}" data-id="${esc(s.id)}" role="option">
         <span class="ck">✓</span>
-        <span><b>${esc(p.c)}</b><span class="s">${esc(p.parroquia)} · ${esc(p.mat)}</span></span>
-        <span class="ord">${p.orden}°</span>
+        <span class="num">${s.n ? s.n : '–'}</span>
+        <span class="txt"><b>${esc(s.codigo)}</b> ${badge(s.tipo, s.dia)}<span class="s">${esc(p.parroquia || '')} · ${esc(p.mat || '')}</span></span>
       </button>`;
-    }).join('') || '<p class="hint" style="padding:14px">Sin resultados.</p>';
+    }
+    $('comboList').innerHTML = html || '<p class="hint" style="padding:14px">Sin resultados.</p>';
   }
 
   function renderAvance() {
-    const total = PUNTOS.length;
-    const hechas = PUNTOS.filter((p) => guardada(p.c)).length;
-    $('avancePill').textContent = `${hechas} / ${total}`;
-    $('progressBar').style.width = (hechas / total * 100).toFixed(1) + '%';
+    const total = planificadas() || sesiones().length;
+    const hechas = sesiones().filter((s) => s.plan && miFicha(s.id)).length;
+    const extras = sesiones().filter((s) => !s.plan && miFicha(s.id)).length;
+    $('avancePill').textContent = `${hechas} / ${total}` + (extras ? ` (+${extras})` : '');
+    $('progressBar').style.width = (hechas / Math.max(1, total) * 100).toFixed(1) + '%';
   }
 
   function renderTodo() {
     renderCombo(); renderAvance();
-    if (S.sel) { pintarComboVal(); pintarPanelPunto(S.sel); }
+    if (S.sel) { pintarComboVal(); pintarPanelPunto(); }
   }
 
-  function seleccionar(codigo) {
-    S.sel = codigo;
+  function seleccionar(id) {
+    const s = sesiones().find((x) => x.id === id);
+    if (!s) return;
+    S.sel = s;
     pintarComboVal();
     $('comboPanel').classList.add('hidden');
     $('comboBtn').setAttribute('aria-expanded', 'false');
     $('btnIr').disabled = false;
     $('btnLevantar').disabled = false;
-    $('btnLevantar').querySelector('span:last-child').firstChild.textContent = guardada(codigo) ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
-    pintarPanelPunto(codigo);
+    $('btnLevantar').querySelector('span:last-child').firstChild.textContent = miFicha(id) ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
+    pintarPanelPunto();
     renderCombo();
   }
 
   function pintarComboVal() {
     if (!S.sel) { $('comboVal').textContent = 'Elegir un punto…'; return; }
-    const p = P(S.sel);
-    const ok = guardada(S.sel);
-    $('comboVal').innerHTML = (ok ? '<span class="ok">✓</span> ' : '') + esc(S.sel) +
+    const p = P(S.sel.codigo);
+    const ok = miFicha(S.sel.id);
+    const num = S.sel.n ? `${S.sel.n}. ` : '';
+    $('comboVal').innerHTML = (ok ? '<span class="ok">✓</span> ' : '') + num + esc(S.sel.codigo) + ' ' + badge(S.sel.tipo, S.sel.dia) +
       ` <small>${esc(p ? p.parroquia : '')}${ok ? ' · guardada' : ''}</small>`;
   }
 
-  function pintarPanelPunto(codigo) {
-    const p = P(codigo); if (!p) return;
-    const f = guardada(codigo);
+  function pintarPanelPunto() {
+    const s = S.sel; if (!s) return;
+    const p = P(s.codigo); if (!p) return;
+    const f = miFicha(s.id);
+    const otraTipo = s.tipo === 'ida' ? 'vuelta' : 'ida';
+    const otra = miFicha(idFicha(s.codigo, otraTipo));
+    const totalTipo = ((typeof RUTA !== 'undefined' && RUTA[s.tipo]) || []).length;
     $('panelPunto').classList.remove('hidden');
-    $('pp-nombre').textContent = p.c;
-    $('pp-sub').textContent = `${p.parroquia} · ${p.orden}° orden · ${p.mat}`;
+    $('pp-nombre').innerHTML = esc(p.c) + ' ' + badge(s.tipo, s.dia);
+    const detalleRuta = s.rol === 'base' ? ` · jornada ${s.dia || 1} · base de referencia (8 h)`
+      : s.rol === 'unica' ? ' · medición única'
+        : s.n ? ` · ${TIPOS[s.tipo]} ${s.n} de ${totalTipo}` : ' · sin ruta asignada';
+    $('pp-sub').textContent = `${p.parroquia} · ${p.orden}° orden · ${p.mat}` + detalleRuta;
     $('pp-datos').innerHTML = [
       ['ESTE (X)', p.e.toLocaleString('es-EC')],
       ['NORTE (Y)', p.n.toLocaleString('es-EC')],
       ['ZONA / DATUM', `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`],
       ['SECTOR / SITIO', p.sector],
-      ['ESTADO', f ? (f.drive && f.drive.estado === 'subida' ? 'Guardada · en Drive' : 'Guardada en el teléfono') : 'Pendiente de levantar'],
+      [TIPOS[s.tipo], f ? (f.drive && f.drive.estado === 'subida' ? 'Guardada · en Drive' : 'Guardada en el teléfono') : 'Pendiente de levantar'],
+      [TIPOS[otraTipo], otra ? 'Ya levantada' : 'Pendiente'],
       ['FICHA', f ? `Del ${PDF.fmtFecha(f.fecha)}` : '—']
     ].map(([k, v]) => `<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
     $('btnVerFicha').classList.toggle('hidden', !f);
     $('btnBorrarFicha').classList.toggle('hidden', !f);
     $('puntoSelHint').textContent = f
-      ? 'Ficha guardada: puedes verla, descargarla o borrarla.'
-      : 'Puedes ir al punto o levantar la ficha.';
+      ? `Ficha ${TIPOS[s.tipo]} guardada: puedes verla, descargarla o borrarla.`
+      : `Puedes ir al punto o levantar la ficha ${TIPOS[s.tipo]}.`;
   }
 
   /* ---------------- IR AL PUNTO (elige la app de mapas) ---------------- */
   function abrirNav(codigo) {
     const p = P(codigo); if (!p) return;
     S.navCod = codigo;
-    // en Android no tiene sentido ofrecer Maps de iPhone
     $('btnNavApple').classList.toggle('hidden', /Android/i.test(navigator.userAgent));
     $('navSub').textContent = `${p.c} · ${p.sector}`;
     $('navSheet').classList.remove('hidden');
@@ -187,7 +249,6 @@ const App = (() => {
     DB.kvSet('nav.ultimo', app).catch(() => {});
     cerrarNav();
     if (app === 'apple' && isIOS) {
-      // si no está instalada la app de Apple, se cae al sitio web
       try { window.location.href = url; } catch (e) { /* nada */ }
       setTimeout(() => {
         if (document.visibilityState === 'visible') {
@@ -200,40 +261,35 @@ const App = (() => {
   }
 
   /* ---------------- ficha: abrir / leer / guardar ---------------- */
-  function nuevaFicha(p) {
+  function nuevaFicha(p, ses) {
     const { lat, lon } = Geo.puntoLatLon(p);
+    const tipo = ses.tipo, dia = ses.dia || null;
     return {
-      id: p.c, codigo: p.c, nombre: p.nombre, parroquia: p.parroquia, sector: p.sector,
+      id: ses.id, codigo: p.c, tipo, dia, sesion: ses.n || null,
+      grupo: (typeof GRUPOS !== 'undefined' && GRUPOS[ses.rol || 'movil']) || '',
+      nombre: p.nombre, parroquia: p.parroquia, sector: p.sector,
       este: p.e, norte: p.n, orden: p.orden, materializacion: p.mat,
       lat, lon,
       inicio: ahoraLocal(), fin: '', fecha: hoy(),
       operador: S.ajustes.ultimoOperador || '', receptor: S.ajustes.ultimoReceptor || '',
       alturaAntena: '',
       metodo: METODO, mascara: MASCARA, intervalo: INTERVALO,
-      croquis: null, croquisZ: null, croquisPendiente: false,
       creado: Date.now(), actualizado: Date.now()
     };
   }
 
-  async function abrirFicha(codigo) {
-    const p = P(codigo); if (!p) return;
-    const f = guardada(codigo);
-    S.editor = f ? clone(f) : nuevaFicha(p);
+  async function abrirFicha(id) {
+    const s = sesiones().find((x) => x.id === id);
+    if (!s) return;
+    const p = P(s.codigo); if (!p) return;
+    const f = miFicha(id);
+    S.editor = f ? clone(f) : nuevaFicha(p, s);
     migrarFicha(S.editor, p);
-    S.fotosEditor = await Fotos.byFicha(codigo);
+    S.fotosEditor = await Fotos.byFicha(id);
     pintarForm();
     pintarFotosEditor();
     mostrar('ficha');
     if (!$('f-extra-nombre').value) $('f-extra-nombre').value = '';
-    if (!S.editor.croquis) {
-      const guardado = await croquisCache(codigo);
-      if (guardado) {
-        S.editor.croquis = guardado.dataUrl;
-        S.editor.croquisZ = guardado.z;
-        pintarCroquis();
-        $('croquisMsg').textContent = 'Croquis preparado en oficina (' + new Date(guardado.fecha).toLocaleDateString('es-EC') + ').';
-      } else if (navigator.onLine) generarCroquis(true);
-    }
   }
 
   /* Compatibilidad con fichas guardadas por versiones anteriores. */
@@ -247,16 +303,19 @@ const App = (() => {
     if (!f.fin && f.horaFin) f.fin = `${(f.fecha || hoy()).slice(0, 10)}T${f.horaFin}`;
     if (!f.fecha) f.fecha = (f.inicio || '').slice(0, 10) || hoy();
     f.metodo = METODO; f.mascara = MASCARA; f.intervalo = INTERVALO;
-    // parroquia, sector y materialización son del diseño: siempre se toman de ahí
     f.nombre = p.nombre; f.parroquia = p.parroquia; f.sector = p.sector; f.materializacion = p.mat;
+    if (!f.tipo) f.tipo = 'ida';
+    if (f.sesion === undefined) f.sesion = nRuta(p.c, f.tipo);
+    if (!f.grupo) f.grupo = (typeof GRUPOS !== 'undefined' && GRUPOS[f.tipo] ) || GRUPOS.movil;
     delete f.horaInicio; delete f.horaFin; delete f.alturaElipsoidal;
     delete f.sats; delete f.gdop; delete f.datum; delete f.epoca;
+    delete f.croquis; delete f.croquisZ; delete f.croquisPendiente;   // ahora el croquis viene con la app
     return f;
   }
 
   function pintarForm() {
     const f = S.editor;
-    $('f-titulo').textContent = `Ficha ${f.codigo}`;
+    $('f-titulo').innerHTML = `Ficha ${esc(f.codigo)} ${badge(f.tipo)}`;
     $('f-codigo').value = f.codigo || '';
     $('f-parroquia').value = f.parroquia || '';
     $('f-sector').value = f.sector || '';
@@ -276,7 +335,7 @@ const App = (() => {
     pintarDuracion();
     pintarNotasDiseno();
     pintarOperadores();
-    $('btnGuardar').textContent = guardada(f.codigo) ? 'Guardar cambios' : 'Guardar ficha';
+    $('btnGuardar').textContent = miFicha(f.id) ? 'Guardar cambios' : 'Guardar ficha';
   }
 
   function pintarNotasDiseno() {
@@ -338,93 +397,11 @@ const App = (() => {
 
   function pintarCroquis() {
     const f = S.editor;
-    const img = $('croquisImg'), vacio = $('croquisEmpty');
-    if (f.croquis) {
-      img.src = f.croquis; img.classList.remove('hidden'); vacio.classList.add('hidden');
-    } else {
-      img.classList.add('hidden'); img.removeAttribute('src'); vacio.classList.remove('hidden');
-    }
-  }
-
-  async function generarCroquis(silencioso) {
-    const f = S.editor; if (!f) return;
-    if (!navigator.onLine) { if (!silencioso) toast('Sin conexión: el croquis necesita internet.', 'err'); return; }
-    if (!silencioso) busy(true, 'Generando croquis…');
-    else $('croquisMsg').textContent = 'Generando croquis…';
-    try {
-      const r = await Croquis.render({ lat: f.lat, lon: f.lon, codigo: f.codigo, e: f.este, n: f.norte });
-      f.croquis = r.dataUrl; f.croquisZ = r.z; f.croquisPendiente = false;
-      pintarCroquis();
-      if (r.conTeselas) await guardarCroquisCache(f.codigo, r.dataUrl, r.z);
-      $('croquisMsg').textContent = r.conTeselas
-        ? `Croquis listo (zoom ${r.z}).`
-        : 'Croquis generado sin imagen satelital: se completará cuando haya internet.';
-      if (silencioso && r.conTeselas) toast('Croquis generado.', 'ok');
-    } catch (e) {
-      $('croquisMsg').textContent = 'No se pudo generar el croquis: ' + e.message;
-      if (!silencioso) toast('No se pudo generar el croquis.', 'err');
-    } finally { if (!silencioso) busy(false); }
-  }
-
-  /* ---- croquis preparados en oficina ---- */
-  async function croquisCache(codigo) {
-    try { return await DB.get('croquis', codigo); } catch (e) { return null; }
-  }
-  async function guardarCroquisCache(codigo, dataUrl, z) {
-    try { await DB.put('croquis', { codigo, dataUrl, z: z || null, fecha: Date.now() }); } catch (e) { /* sin espacio */ }
-  }
-
-  async function prepararCroquis() {
-    if (!navigator.onLine) { toast('Hace falta internet para preparar los croquis.', 'err'); return; }
-    let ok = 0, sin = 0, err = 0;
-    for (let i = 0; i < PUNTOS.length; i++) {
-      const p = PUNTOS[i];
-      busy(true, `Croquis ${i + 1} de ${PUNTOS.length} · ${p.c}`);
-      try {
-        const { lat, lon } = Geo.puntoLatLon(p);
-        const r = await Croquis.render({ lat, lon, codigo: p.c, e: p.e, n: p.n });
-        if (r.conTeselas) { await guardarCroquisCache(p.c, r.dataUrl, r.z); ok++; }
-        else sin++;
-      } catch (e) { err++; }
-    }
-    busy(false);
-    const msg = `Croquis listos: ${ok} de ${PUNTOS.length}` +
-      (sin ? ` · ${sin} sin imagen satelital` : '') + (err ? ` · ${err} con error` : '') + '.';
-    $('croquisPrepMsg').textContent = msg + ' Ya se pueden usar sin internet.';
-    toast(msg, err || sin ? 'err' : 'ok');
-  }
-
-  /* Completa los croquis que quedaron pendientes (al volver internet). */
-  async function completarCroquisPendientes() {
-    if (!navigator.onLine) return 0;
-    const pend = Array.from(S.fichas.values()).filter((f) => !f.croquis);
-    let n = 0;
-    for (const f of pend) {
-      try {
-        const cache = await croquisCache(f.codigo);
-        let dataUrl = cache && cache.dataUrl, z = cache && cache.z;
-        if (!dataUrl) {
-          const p = P(f.codigo);
-          const ll = p ? Geo.puntoLatLon(p) : { lat: f.lat, lon: f.lon };
-          const r = await Croquis.render({ lat: ll.lat, lon: ll.lon, codigo: f.codigo, e: f.este, n: f.norte });
-          dataUrl = r.dataUrl; z = r.z;
-        }
-        f.croquis = dataUrl; f.croquisZ = z; f.croquisPendiente = false;
-        f.drive = Object.assign({}, f.drive || {}, { estado: 'pend' });
-        await DB.put('fichas', f);
-        S.fichas.set(f.codigo, f);
-        n++;
-      } catch (e) { /* se reintenta la próxima vez */ }
-    }
-    if (n) {
-      renderTodo(); renderDrive();
-      if (!$('v-ficha').classList.contains('hidden') && S.editor && !S.editor.croquis) {
-        const c = await croquisCache(S.editor.codigo);
-        if (c) { S.editor.croquis = c.dataUrl; S.editor.croquisZ = c.z; pintarCroquis(); }
-      }
-      toast(`Se completaron ${n} croquis pendientes.`, 'ok');
-    }
-    return n;
+    const img = $('croquisImg');
+    if (!f) return;
+    img.classList.remove('hidden');
+    img.onerror = () => img.classList.add('hidden');
+    img.src = urlCroquis(f.codigo);
   }
 
   async function guardarFicha() {
@@ -437,24 +414,22 @@ const App = (() => {
     if (!f.inicio) faltan.push('inicio (fecha y hora)');
     if (!f.fin) faltan.push('fin (fecha y hora)');
     if (f.inicio && f.fin && duracionMin(f) != null && duracionMin(f) <= 0) faltan.push('fin posterior al inicio');
+    else if (duracionMin(f) > 14 * 60) faltan.push('duración coherente (más de 14 h entre inicio y fin)');
     if (!f.operador) faltan.push('operador');
-    if (!f.croquis) faltan.push('croquis (se puede completar después)');
     if (!S.fotosEditor.some((m) => m.tipo === 'punto')) faltan.push('fotografía de la medición');
     if (!S.fotosEditor.some((m) => m.tipo === 'placa')) faltan.push('fotografía de la placa');
     if (faltan.length && !confirm('Falta completar:\n· ' + faltan.join('\n· ') + '\n\n¿Guardar la ficha igual?')) return;
 
     f.duracionMin = duracionMin(f);
-    f.croquisPendiente = !f.croquis;
-    const prev = guardada(f.codigo);
+    const prev = miFicha(f.id);
     f.drive = prev && prev.drive ? prev.drive : { estado: 'pend' };
     if (prev) {
       const campos = ['receptor', 'alturaAntena', 'inicio', 'fin'];
       if (campos.some((k) => String(prev[k] || '') !== String(f[k] || ''))) f.drive.estado = 'pend';
-      if (!prev.croquis && f.croquis) f.drive.estado = 'pend';
     }
 
     await DB.put('fichas', f);
-    S.fichas.set(f.codigo, f);
+    S.fichas.set(f.id, f);
     if (f.operador) {
       S.ajustes.ultimoOperador = f.operador;
       S.ajustes.operadores = S.ajustes.operadores || [];
@@ -464,9 +439,9 @@ const App = (() => {
     await guardarAjustes();
 
     renderTodo();
-    toast('Ficha guardada. ✓', 'ok');
+    toast(`Ficha ${TIPOS[f.tipo]} guardada. ✓`, 'ok');
     mostrar('puntos');
-    if (S.ajustes.autoSubir && Drive.configurado() && !f.croquisPendiente) subirUna(f.codigo, true);
+    if (S.ajustes.autoSubir && Drive.configurado()) subirUna(f.id, true);
   }
 
   /* ---------------- fotografías ---------------- */
@@ -482,12 +457,12 @@ const App = (() => {
         const pr = await Fotos.procesar(file);
         orden += 1;
         await Fotos.add({
-          id: uid(), fichaId: S.editor.codigo, tipo, blob: pr.blob, orig: pr.orig,
+          id: uid(), fichaId: S.editor.id, tipo, blob: pr.blob, orig: pr.orig,
           thumb: pr.thumb, w: pr.w, h: pr.h, orden, etiqueta,
           nombre: file.name || `${tipo}.jpg`
         });
       }
-      S.fotosEditor = await Fotos.byFicha(S.editor.codigo);
+      S.fotosEditor = await Fotos.byFicha(S.editor.id);
       pintarFotosEditor();
       toast(files.length === 1 ? 'Fotografía agregada.' : `${files.length} fotografías agregadas.`, 'ok');
     } catch (e) {
@@ -516,7 +491,7 @@ const App = (() => {
   async function borrarFoto(id) {
     if (!confirm('¿Borrar esta fotografía?')) return;
     await Fotos.remove(id);
-    S.fotosEditor = await Fotos.byFicha(S.editor.codigo);
+    S.fotosEditor = await Fotos.byFicha(S.editor.id);
     pintarFotosEditor();
   }
 
@@ -525,9 +500,28 @@ const App = (() => {
     $('visor').classList.remove('hidden');
   }
 
+  /* ---------------- croquis incluido ---------------- */
+  /* Los 22 croquis vienen generados en img/croquis/<código>.jpg. */
+  const croquisMemo = new Map();
+  const urlCroquis = (codigo) => `img/croquis/${codigo}.jpg`;
+
+  async function croquisDe(codigo) {
+    if (croquisMemo.has(codigo)) return croquisMemo.get(codigo);
+    let r = null;
+    try {
+      const res = await fetch(urlCroquis(codigo), { cache: 'force-cache' });
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size) r = { dataUrl: await Fotos.blobToDataURL(blob) };
+      }
+    } catch (e) { r = null; }
+    croquisMemo.set(codigo, r);
+    return r;
+  }
+
   /* ---------------- PDF ---------------- */
-  async function fotosParaPDF(codigo) {
-    const metas = await Fotos.byFicha(codigo);
+  async function fotosParaPDF(id) {
+    const metas = await Fotos.byFicha(id);
     const out = [];
     for (const m of metas) {
       const blob = await Fotos.getBlob(m.id);
@@ -538,18 +532,19 @@ const App = (() => {
     return out;
   }
 
-  async function pdfDe(codigo) {
-    const f = guardada(codigo);
+  async function pdfDe(id) {
+    const f = miFicha(id);
     if (!f) throw new Error('La ficha todavía no está guardada.');
-    const fotos = await fotosParaPDF(codigo);
-    const doc = PDF.fichaDoc(f, fotos);
-    return { blob: doc.output('blob'), nombre: `${safe(f.codigo)}_${(f.fecha || hoy()).slice(0, 10)}.pdf` };
+    const fotos = await fotosParaPDF(id);
+    const croquis = await croquisDe(f.codigo);
+    const doc = PDF.fichaDoc(f, fotos, croquis);
+    return { blob: doc.output('blob'), nombre: `${safe(id)}_${(f.fecha || hoy()).slice(0, 10)}.pdf` };
   }
 
-  async function descargarPDF(codigo, compartir) {
+  async function descargarPDF(id, compartir) {
     busy(true, 'Generando el PDF…');
     try {
-      const { blob, nombre } = await pdfDe(codigo);
+      const { blob, nombre } = await pdfDe(id);
       if (compartir) await compartirBlob(blob, nombre, 'application/pdf');
       else bajarBlob(blob, nombre);
       toast(compartir ? 'PDF listo para compartir.' : 'PDF descargado.', 'ok');
@@ -559,15 +554,18 @@ const App = (() => {
   }
 
   /* ---------------- detalle ---------------- */
-  async function verDetalle(codigo) {
-    const f = guardada(codigo);
-    if (!f) { abrirFicha(codigo); return; }
-    S.sel = codigo;
+  async function verDetalle(id) {
+    const f = miFicha(id);
+    if (!f) { abrirFicha(id); return; }
+    const s = sesiones().find((x) => x.id === id) || { id, codigo: f.codigo, tipo: f.tipo || 'ida', n: f.sesion || null };
+    S.sel = s;
     mostrar('detalle');
-    $('d-titulo').textContent = f.codigo;
+    $('d-titulo').innerHTML = esc(f.codigo) + ' ' + badge(f.tipo || 'ida', f.dia);
     $('d-sub').textContent = `${f.parroquia} · ${f.orden}° orden · ${f.materializacion || ''}`;
     const d = duracionMin(f);
+    const totalTipo = ((typeof RUTA !== 'undefined' && RUTA[f.tipo]) || []).length;
     $('d-datos').innerHTML = [
+      ['TIPO', `${TIPOS[f.tipo || 'ida']}${f.sesion ? ` (${f.sesion} de ${totalTipo})` : ''}`],
       ['ESTE (X)', Number(f.este).toLocaleString('es-EC')],
       ['NORTE (Y)', Number(f.norte).toLocaleString('es-EC')],
       ['ZONA / DATUM', `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`],
@@ -582,12 +580,11 @@ const App = (() => {
       ['ACTUALIZADA', new Date(f.actualizado || f.creado || Date.now()).toLocaleString('es-EC')]
     ].map(([k, v]) => `<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
 
-    $('d-croquisPanel').classList.toggle('hidden', !f.croquis);
-    if (f.croquis) $('d-croquis').src = f.croquis;
+    $('d-croquis').src = urlCroquis(f.codigo);
 
     S.urls.forEach((u) => URL.revokeObjectURL(u));
     S.urls = [];
-    const metas = await Fotos.byFicha(codigo);
+    const metas = await Fotos.byFicha(id);
     const fotosHtml = [];
     for (const m of metas) {
       const blob = await Fotos.getBlob(m.id);
@@ -605,9 +602,7 @@ const App = (() => {
       ? `Subida el ${new Date(dr.fecha).toLocaleString('es-EC')}.<br>Carpeta: <code>${esc(dr.ruta || '')}</code>`
       : dr.estado === 'error'
         ? `La última subida falló: ${esc(dr.error || '')}`
-        : f.croquisPendiente
-          ? 'Todavía no se ha subido. El croquis está pendiente: se completará cuando haya internet.'
-          : 'Todavía no se ha subido a Drive.';
+        : 'Todavía no se ha subido a Drive.';
 
     S.miPunto = null;
     setTimeout(() => montarMapaDetalle(f), 60);
@@ -622,7 +617,7 @@ const App = (() => {
   }
 
   function miUbicacion() {
-    const f = guardada(S.sel);
+    const f = S.sel && miFicha(S.sel.id);
     if (!f) return;
     if (!navigator.geolocation) { toast('Este navegador no da la ubicación.', 'err'); return; }
     if (S.watchGps != null) { navigator.geolocation.clearWatch(S.watchGps); S.watchGps = null; }
@@ -643,8 +638,8 @@ const App = (() => {
   }
 
   /* ---------------- Drive ---------------- */
-  async function fotosParaDrive(codigo) {
-    const metas = await Fotos.byFicha(codigo);
+  async function fotosParaDrive(id) {
+    const metas = await Fotos.byFicha(id);
     const out = [];
     for (const m of metas) {
       const rec = await Fotos.getRec(m.id);
@@ -657,30 +652,29 @@ const App = (() => {
     return out;
   }
 
-  async function subirUna(codigo, automatico) {
-    const f = guardada(codigo);
+  async function subirUna(id, automatico) {
+    const f = miFicha(id);
     if (!f) { toast('Guarda la ficha antes de subirla.', 'err'); return; }
     if (!Drive.configurado()) { toast('Configura la URL y la clave del script en la pestaña Drive.', 'err'); return; }
-    if (!f.croquis) { toast('La ficha está sin croquis: se subirá cuando se complete.', 'err'); return; }
     try {
       busy(true, 'Preparando la subida…');
-      const { blob } = await pdfDe(codigo);
-      const fotos = await fotosParaDrive(codigo);
+      const { blob } = await pdfDe(id);
+      const fotos = await fotosParaDrive(id);
       const r = await Drive.subirFicha(f, blob, fotos, (t) => busy(true, t));
       f.drive = { estado: 'subida', fecha: Date.now(), ruta: r.ruta, archivos: r.archivos, sinConfirmar: !!r.sinConfirmar };
       await DB.put('fichas', f);
-      S.fichas.set(codigo, f);
+      S.fichas.set(id, f);
       if (S.ajustes.borrarOrig) {
-        for (const m of await Fotos.byFicha(codigo)) if (m.tieneOrig) await Fotos.soloOriginal(m.id);
-        S.fotosEditor = await Fotos.byFicha(codigo);
+        for (const m of await Fotos.byFicha(id)) if (m.tieneOrig) await Fotos.soloOriginal(m.id);
+        S.fotosEditor = await Fotos.byFicha(id);
       }
       renderTodo(); renderDrive();
-      if (S.sel === codigo && !$('v-detalle').classList.contains('hidden')) verDetalle(codigo);
+      if (S.sel && S.sel.id === id && !$('v-detalle').classList.contains('hidden')) verDetalle(id);
       toast(r.sinConfirmar ? 'Enviado a Drive (no se pudo confirmar la respuesta).' : 'Ficha subida a Drive.', 'ok');
     } catch (e) {
       f.drive = { estado: 'error', fecha: Date.now(), error: e.message };
       await DB.put('fichas', f);
-      S.fichas.set(codigo, f);
+      S.fichas.set(id, f);
       renderDrive();
       toast('No se pudo subir: ' + e.message, 'err');
       void automatico;
@@ -688,17 +682,16 @@ const App = (() => {
   }
 
   async function subirPendientes(soloErrores) {
-    const lista = PUNTOS.map((p) => guardada(p.c)).filter(Boolean)
+    const lista = sesiones().map((s) => miFicha(s.id)).filter(Boolean)
       .filter((f) => (soloErrores ? f.drive && f.drive.estado === 'error' : !f.drive || f.drive.estado !== 'subida'));
     if (!lista.length) { toast('No hay fichas pendientes de subir.', 'ok'); return; }
     if (!Drive.configurado()) { toast('Configura la URL y la clave del script primero.', 'err'); return; }
-    let ok = 0, err = 0, saltadas = 0;
+    let ok = 0, err = 0;
     for (const f of lista) {
-      if (!f.croquis) { saltadas++; continue; }
-      busy(true, `Subiendo ${f.codigo} (${ok + err + 1} de ${lista.length})…`);
+      busy(true, `Subiendo ${f.id} (${ok + err + 1} de ${lista.length})…`);
       try {
-        const { blob } = await pdfDe(f.codigo);
-        const fotos = await fotosParaDrive(f.codigo);
+        const { blob } = await pdfDe(f.id);
+        const fotos = await fotosParaDrive(f.id);
         const r = await Drive.subirFicha(f, blob, fotos);
         f.drive = { estado: 'subida', fecha: Date.now(), ruta: r.ruta, archivos: r.archivos, sinConfirmar: !!r.sinConfirmar };
         ok++;
@@ -707,14 +700,11 @@ const App = (() => {
         err++;
       }
       await DB.put('fichas', f);
-      S.fichas.set(f.codigo, f);
+      S.fichas.set(f.id, f);
       renderDrive(); renderTodo();
     }
     busy(false);
-    let msg = `Subida terminada: ${ok} correcta(s)`;
-    if (err) msg += `, ${err} con error`;
-    if (saltadas) msg += `, ${saltadas} sin croquis (se subirán después)`;
-    toast(msg + '.', err ? 'err' : 'ok');
+    toast(`Subida terminada: ${ok} correcta(s)` + (err ? `, ${err} con error` : '') + '.', err ? 'err' : 'ok');
   }
 
   function renderDrive() {
@@ -731,22 +721,23 @@ const App = (() => {
     $('driveUrl').value = Drive.urlActual() || '';
     $('driveClave').value = Drive.claveActual() || '';
 
-    const total = PUNTOS.filter((p) => guardada(p.c)).length;
-    const subidas = PUNTOS.filter((p) => { const f = guardada(p.c); return f && f.drive && f.drive.estado === 'subida'; }).length;
-    const errores = PUNTOS.filter((p) => { const f = guardada(p.c); return f && f.drive && f.drive.estado === 'error'; }).length;
+    const todas = sesiones().map((s) => miFicha(s.id)).filter(Boolean);
+    const total = todas.length;
+    const subidas = todas.filter((f) => f.drive && f.drive.estado === 'subida').length;
+    const errores = todas.filter((f) => f.drive && f.drive.estado === 'error').length;
     $('driveResumen').innerHTML = `Fichas guardadas: <b>${total}</b> · en Drive: <b>${subidas}</b> · pendientes: <b>${total - subidas - errores}</b>` +
       (errores ? ` · con error: <b class="err">${errores}</b>` : '');
     $('autoSubir').checked = !!S.ajustes.autoSubir;
     $('borrarOrig').checked = !!S.ajustes.borrarOrig;
 
-    $('driveCola').innerHTML = PUNTOS.map((p) => {
-      const f = guardada(p.c);
+    $('driveCola').innerHTML = sesiones().map((s) => {
+      const f = miFicha(s.id);
       if (!f) return '';
       const e = (f.drive && f.drive.estado) || 'pend';
       const cls = e === 'subida' ? 'sub' : e === 'error' ? 'err' : 'pend';
-      const txt = e === 'subida' ? 'En Drive' : e === 'error' ? 'Error' : (!f.croquis ? 'Sin croquis' : 'Pendiente');
+      const txt = e === 'subida' ? 'En Drive' : e === 'error' ? 'Error' : 'Pendiente';
       const det = e === 'error' ? esc((f.drive || {}).error || '') : PDF.fmtFecha(f.fecha);
-      return `<div class="fila"><div><b>${esc(p.c)}</b><small>${det}</small></div><span class="est ${cls}">${txt}</span></div>`;
+      return `<div class="fila"><div><b>${esc(f.codigo)}</b> ${badge(f.tipo, f.dia)}<small>${det}</small></div><span class="est ${cls}">${txt}</span></div>`;
     }).join('') || '<p class="hint">Todavía no hay fichas guardadas.</p>';
   }
 
@@ -760,18 +751,20 @@ const App = (() => {
       por[m.fichaId] = por[m.fichaId] || { punto: 0, placa: 0, extra: 0 };
       por[m.fichaId][m.tipo] = (por[m.fichaId][m.tipo] || 0) + 1;
     });
-    const cols = ['codigo', 'parroquia', 'sector', 'orden', 'este', 'norte', 'materializacion',
+    const cols = ['id', 'codigo', 'tipo', 'jornada', 'grupo', 'sesion', 'parroquia', 'sector', 'orden', 'este', 'norte', 'materializacion',
       'receptor', 'altura_antena', 'inicio', 'fin', 'duracion_min', 'metodo', 'mascara', 'intervalo',
       'operador', 'fotos_medicion', 'fotos_placa', 'fotos_extra', 'croquis', 'drive'];
-    const filas = PUNTOS.map((p) => {
-      const f = guardada(p.c) || {};
-      const c = por[p.c] || { punto: 0, placa: 0, extra: 0 };
-      return [p.c, p.parroquia, f.sector || p.sector, p.orden, p.e, p.n,
-        f.materializacion || p.mat, f.receptor || '', f.alturaAntena || '', f.inicio || '', f.fin || '',
-        f.duracionMin || '', f.metodo || METODO, f.mascara || MASCARA, f.intervalo || INTERVALO,
-        f.operador || '', c.punto, c.placa, c.extra,
-        f.croquis ? 'sí' : (f.codigo ? 'pendiente' : 'no'),
-        (f.drive && f.drive.estado) || 'pendiente'];
+    const filas = sesiones().map((s) => {
+      const p = P(s.codigo) || {};
+      const f = miFicha(s.id);
+      const c = por[s.id] || { punto: 0, placa: 0, extra: 0 };
+      const d = f || {};
+      return [s.id, s.codigo, s.tipo, s.dia || '', (d.grupo || ''), s.n || '', p.parroquia, d.sector || p.sector, p.orden, p.e, p.n,
+        d.materializacion || p.mat, d.receptor || '', d.alturaAntena || '', d.inicio || '', d.fin || '',
+        d.duracionMin || '', d.metodo || METODO, d.mascara || MASCARA, d.intervalo || INTERVALO,
+        d.operador || '', c.punto, c.placa, c.extra,
+        f ? 'incluido' : '—',
+        (d.drive && d.drive.estado) || (f ? 'pendiente' : 'sin ficha')];
     });
     const csv = '\ufeff' + [cols.join(';')].concat(filas.map((r) => r.map(csvQ).join(';'))).join('\r\n');
     bajarBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `avance_red_geodesica_${hoy()}.csv`);
@@ -779,18 +772,23 @@ const App = (() => {
 
   function geojsonPuntos() {
     const feats = PUNTOS.map((p) => {
-      const f = guardada(p.c) || {};
+      const ida = miFicha(idFicha(p.c, 'ida'));
+      const vuelta = miFicha(idFicha(p.c, 'vuelta'));
       const { lat, lon } = Geo.puntoLatLon(p);
+      const si = (f) => (f ? 'si' : 'no');
       return {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [lon, lat] },
         properties: {
-          codigo: p.c, parroquia: p.parroquia, sector: f.sector || p.sector,
-          orden: p.orden, este: p.e, norte: p.n, mat: f.materializacion || p.mat,
-          receptor: f.receptor || '', altura: f.alturaAntena || '', inicio: f.inicio || '',
-          fin: f.fin || '', dur: f.duracionMin || '', operador: f.operador || '',
-          ficha: f.codigo ? 'si' : 'no', croquis: f.croquis ? 'si' : 'pendiente',
-          drive: (f.drive && f.drive.estado) || ''
+          codigo: p.c, parroquia: p.parroquia, sector: (ida || vuelta || {}).sector || p.sector,
+          orden: p.orden, este: p.e, norte: p.n, mat: (ida || vuelta || {}).materializacion || p.mat,
+          n_ida: nRuta(p.c, 'ida') || '', n_vuelta: nRuta(p.c, 'vuelta') || '',
+          ficha_ida: si(ida), ficha_vuelta: si(vuelta),
+          operador_ida: ida ? ida.operador || '' : '', operador_vuelta: vuelta ? vuelta.operador || '' : '',
+          receptor_ida: ida ? ida.receptor || '' : '', receptor_vuelta: vuelta ? vuelta.receptor || '' : '',
+          dur_ida: ida ? ida.duracionMin || '' : '', dur_vuelta: vuelta ? vuelta.duracionMin || '' : '',
+          croquis: 'incluido',
+          drive_ida: (ida && ida.drive && ida.drive.estado) || '', drive_vuelta: (vuelta && vuelta.drive && vuelta.drive.estado) || ''
         }
       };
     });
@@ -798,36 +796,36 @@ const App = (() => {
   }
 
   function exportarGeo(codigo) {
-    const txt = geojsonPuntos();
     const nombre = codigo ? `punto_${safe(codigo)}.geojson` : `red_geodesica_${hoy()}.geojson`;
     if (codigo) {
-      const j = JSON.parse(txt);
+      const j = JSON.parse(geojsonPuntos());
       j.features = j.features.filter((f) => f.properties.codigo === codigo);
       bajarBlob(new Blob([JSON.stringify(j, null, 2)], { type: 'application/geo+json' }), nombre);
-    } else bajarBlob(new Blob([txt], { type: 'application/geo+json' }), nombre);
+    } else bajarBlob(new Blob([geojsonPuntos()], { type: 'application/geo+json' }), nombre);
   }
 
-  async function exportarZip(codigo) {
+  async function exportarZip(id) {
     busy(true, 'Empaquetando fotografías…');
     try {
-      const fichas = codigo ? [guardada(codigo)] : Array.from(S.fichas.values());
+      const fichas = id ? [miFicha(id)] : Array.from(S.fichas.values());
       const entradas = [];
-      const indice = [['codigo', 'tipo', 'etiqueta', 'orden', 'archivo', 'ancho', 'alto', 'fecha']];
+      const indice = [['id', 'codigo', 'tipo', 'foto', 'etiqueta', 'orden', 'archivo', 'ancho', 'alto', 'fecha']];
       for (const f of fichas) {
         if (!f) continue;
-        for (const m of await Fotos.byFicha(f.codigo)) {
+        const etq = TIPOS[f.tipo || 'ida'];
+        for (const m of await Fotos.byFicha(f.id)) {
           const blob = await Fotos.getBlob(m.id);
           if (!blob) continue;
-          const nombre = `${f.codigo}/${f.codigo}_${NOMBRE_TIPO[m.tipo] || m.tipo}_${m.orden}.jpg`;
+          const nombre = `${f.codigo}/${f.codigo}_${etq}_${NOMBRE_TIPO[m.tipo] || m.tipo}_${m.orden}.jpg`;
           entradas.push({ name: nombre, blob });
-          indice.push([f.codigo, m.tipo, m.etiqueta || '', m.orden, nombre, m.w, m.h, new Date(m.tomada || Date.now()).toISOString()]);
+          indice.push([f.id, f.codigo, f.tipo, m.tipo, m.etiqueta || '', m.orden, nombre, m.w, m.h, new Date(m.tomada || Date.now()).toISOString()]);
         }
       }
       if (!entradas.length) { toast('No hay fotografías para exportar.', 'err'); return; }
       const csv = '\ufeff' + indice.map((r) => r.map(csvQ).join(';')).join('\r\n');
       entradas.push({ name: 'indice_fotos.csv', blob: new Blob([csv], { type: 'text/csv' }) });
       const zip = await Zip.build(entradas);
-      bajarBlob(zip, codigo ? `fotos_${safe(codigo)}.zip` : `fotos_red_geodesica_${hoy()}.zip`);
+      bajarBlob(zip, id ? `fotos_${safe(id)}.zip` : `fotos_red_geodesica_${hoy()}.zip`);
       toast('ZIP generado.', 'ok');
     } catch (e) {
       toast('No se pudo generar el ZIP: ' + e.message, 'err');
@@ -837,7 +835,7 @@ const App = (() => {
   async function exportarRespaldo() {
     const lista = Array.from(S.fichas.values()).map((f) => {
       const c = Object.assign({}, f);
-      delete c.croquis;               // el croquis se puede regenerar y pesa mucho
+      delete c.croquis;
       return c;
     });
     const datos = {
@@ -858,10 +856,11 @@ const App = (() => {
         if (!f || !f.codigo) continue;
         const p = P(f.codigo);
         if (p) migrarFicha(f, p);
-        const actual = guardada(f.codigo);
+        if (!f.id) f.id = idFicha(f.codigo, f.tipo || 'ida');
+        const actual = miFicha(f.id);
         if (actual && (actual.actualizado || 0) > (f.actualizado || 0)) continue;
         await DB.put('fichas', f);
-        S.fichas.set(f.codigo, f);
+        S.fichas.set(f.id, f);
         n++;
       }
       renderTodo(); renderDrive();
@@ -885,7 +884,6 @@ const App = (() => {
   let swReg = null;
   let teniaControl = false;
   let buildSW = '';
-  let actualizacionPendiente = false;
 
   function mostrarBarra(version) {
     const barra = $('updateBar');
@@ -973,19 +971,39 @@ const App = (() => {
   }
 
   /* ---------------- arranque ---------------- */
+  /* Las fichas de versiones anteriores (una por punto) pasan a ser las de IDA. */
+  async function migrarSesiones() {
+    const viejas = (await DB.all('fichas')).filter((f) => !f.tipo);
+    for (const f of viejas) {
+      const codigo = f.codigo || String(f.id);
+      const tipo = 'ida';
+      const nuevoId = idFicha(codigo, tipo);
+      const nuevo = Object.assign({}, f, { id: nuevoId, codigo, tipo, sesion: nRuta(codigo, tipo) });
+      await DB.put('fichas', nuevo);
+      if (f.id !== nuevoId) {
+        await DB.del('fichas', f.id);
+        for (const m of await DB.all('pmeta')) if (m.fichaId === f.id) await DB.put('pmeta', Object.assign({}, m, { fichaId: nuevoId }));
+        for (const p of await DB.all('photos')) if (p.fichaId === f.id) await DB.put('photos', Object.assign({}, p, { fichaId: nuevoId }));
+      }
+      console.log('Ficha migrada a IDA:', codigo);
+    }
+  }
+
   async function init() {
     await cargarAjustes();
     iniciarServiceWorker();
     $('btnReload').addEventListener('click', aplicarActualizacion);
     $('btnUpdateX').addEventListener('click', () => $('updateBar').classList.add('hidden'));
 
+    await migrarSesiones();
+
     const fichas = await DB.all('fichas');
     for (const f of fichas) {
-      const p = P(f.id);
+      const p = P(f.codigo || f.id);
       if (p) {
         const antes = JSON.stringify(f);
         migrarFicha(f, p);
-        if (JSON.stringify(f) !== antes) await DB.put('fichas', f);   // deja migrada la ficha vieja
+        if (JSON.stringify(f) !== antes) await DB.put('fichas', f);
       }
       S.fichas.set(f.id, f);
     }
@@ -999,8 +1017,7 @@ const App = (() => {
     estadoApp();
     cablear();
     document.body.dataset.listo = '1';
-    console.log('Inspección GNSS lista · ' + PUNTOS.length + ' puntos · ' + fichas.length + ' fichas guardadas');
-    setTimeout(() => { completarCroquisPendientes(); }, 2000);
+    console.log(`Inspección GNSS lista · ${PUNTOS.length} puntos · ${planificadas()} fichas planificadas · ${fichas.length} guardadas`);
   }
 
   function netState() {
@@ -1020,14 +1037,9 @@ const App = (() => {
     } catch (e) { /* sin datos */ }
     const p = await Fotos.peso();
     $('storageInfo').textContent = (txt ? txt + ' ' : '') + `Fotografías: ${p.n} (${(p.bytes / 1048576).toFixed(1)} MB).`;
-    let nCro = 0;
-    try { nCro = (await DB.all('croquis')).length; } catch (e) { /* store nuevo */ }
-    $('croquisPrepMsg').textContent = nCro
-      ? `Croquis preparados: ${nCro} de ${PUNTOS.length}. Los que faltan se generan al abrir la ficha (con internet).`
-      : 'Genera de una vez los croquis de todos los puntos: hazlo en oficina, con wifi, y en campo no hará falta internet para la ficha.';
     $('offlineState').textContent = navigator.onLine
       ? 'La app está guardada en este teléfono: abre y funciona sin conexión.'
-      : 'Sin conexión: puedes seguir levantando fichas; el croquis y Drive se completan cuando vuelva el internet.';
+      : 'Sin conexión: puedes seguir levantando fichas; la subida a Drive se completa cuando vuelva el internet.';
   }
 
   /* ---------------- eventos ---------------- */
@@ -1049,19 +1061,19 @@ const App = (() => {
     });
     $('comboQ').addEventListener('input', renderCombo);
     $('comboList').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-cod]');
-      if (b) seleccionar(b.dataset.cod);
+      const b = e.target.closest('[data-id]');
+      if (b) seleccionar(b.dataset.id);
     });
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#combo')) $('comboPanel').classList.add('hidden');
     });
 
-    $('btnIr').addEventListener('click', () => S.sel && abrirNav(S.sel));
+    $('btnIr').addEventListener('click', () => S.sel && abrirNav(S.sel.codigo));
     document.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.nav, S.navCod)));
     document.querySelectorAll('[data-nav-close]').forEach((b) => b.addEventListener('click', cerrarNav));
-    $('btnLevantar').addEventListener('click', () => S.sel && abrirFicha(S.sel));
-    $('btnVerFicha').addEventListener('click', () => S.sel && verDetalle(S.sel));
-    $('btnBorrarFicha').addEventListener('click', () => S.sel && borrarFicha(S.sel));
+    $('btnLevantar').addEventListener('click', () => S.sel && abrirFicha(S.sel.id));
+    $('btnVerFicha').addEventListener('click', () => S.sel && verDetalle(S.sel.id));
+    $('btnBorrarFicha').addEventListener('click', () => S.sel && borrarFicha(S.sel.id));
 
     $('btnFichaBack').addEventListener('click', async () => {
       await limpiarBorrador();
@@ -1071,8 +1083,7 @@ const App = (() => {
     $('f-inicio').addEventListener('change', () => { leerForm(); });
     $('f-fin').addEventListener('change', () => { leerForm(); });
     document.querySelectorAll('[data-ahora]').forEach((b) => b.addEventListener('click', () => ponerAhora(b.dataset.ahora)));
-    $('btnCroquis').addEventListener('click', () => generarCroquis(false));
-    $('btnVerCroquis').addEventListener('click', () => S.editor && S.editor.croquis && verImagen(S.editor.croquis));
+    $('btnVerCroquis').addEventListener('click', () => S.editor && verImagen(urlCroquis(S.editor.codigo)));
 
     document.querySelectorAll('[data-foto]').forEach((b) => b.addEventListener('click', () => {
       const tipo = b.dataset.foto, src = b.dataset.src;
@@ -1097,16 +1108,16 @@ const App = (() => {
     $('visorClose').addEventListener('click', () => { $('visor').classList.add('hidden'); $('visorImg').src = ''; });
 
     $('btnDetBack').addEventListener('click', () => { mostrar('puntos'); renderTodo(); });
-    $('btnDetPdf').addEventListener('click', () => S.sel && descargarPDF(S.sel, false));
-    $('d-pdf').addEventListener('click', () => S.sel && descargarPDF(S.sel, false));
-    $('d-share').addEventListener('click', () => S.sel && descargarPDF(S.sel, true));
-    $('d-geo').addEventListener('click', () => S.sel && exportarGeo(S.sel));
-    $('d-zip').addEventListener('click', () => S.sel && exportarZip(S.sel));
-    $('d-edit').addEventListener('click', () => S.sel && abrirFicha(S.sel));
-    $('d-del').addEventListener('click', () => S.sel && borrarFicha(S.sel));
-    $('d-subir').addEventListener('click', () => S.sel && subirUna(S.sel, false));
+    $('btnDetPdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
+    $('d-pdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
+    $('d-share').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, true));
+    $('d-geo').addEventListener('click', () => S.sel && exportarGeo(S.sel.codigo));
+    $('d-zip').addEventListener('click', () => S.sel && exportarZip(S.sel.id));
+    $('d-edit').addEventListener('click', () => S.sel && abrirFicha(S.sel.id));
+    $('d-del').addEventListener('click', () => S.sel && borrarFicha(S.sel.id));
+    $('d-subir').addEventListener('click', () => S.sel && subirUna(S.sel.id, false));
     $('d-miUbicacion').addEventListener('click', miUbicacion);
-    $('d-ir').addEventListener('click', () => S.sel && abrirNav(S.sel));
+    $('d-ir').addEventListener('click', () => S.sel && abrirNav(S.sel.codigo));
 
     // Drive (Apps Script)
     $('btnProbar').addEventListener('click', async () => {
@@ -1155,9 +1166,8 @@ const App = (() => {
     $('btnCsv').addEventListener('click', exportarCsv);
     $('btnGeo').addEventListener('click', () => exportarGeo(null));
     $('btnBuscar').addEventListener('click', buscarActualizacion);
-    $('btnPrepCroquis').addEventListener('click', prepararCroquis);
     $('btnBorrarTodo').addEventListener('click', async () => {
-      if (!confirm('Se borrarán TODAS las fichas, fotografías y croquis de este teléfono. ¿Continuar?')) return;
+      if (!confirm('Se borrarán TODAS las fichas y fotografías de este teléfono. ¿Continuar?')) return;
       await DB.clear('fichas'); await DB.clear('photos'); await DB.clear('pmeta'); await DB.clear('croquis');
       S.fichas.clear(); S.sel = null;
       $('panelPunto').classList.add('hidden');
@@ -1168,10 +1178,7 @@ const App = (() => {
       toast('Datos borrados.', 'ok');
     });
 
-    const alVolver = () => {
-      netState();
-      completarCroquisPendientes();
-    };
+    const alVolver = () => { netState(); };
     window.addEventListener('online', alVolver);
     window.addEventListener('offline', netState);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') alVolver(); });
@@ -1180,23 +1187,25 @@ const App = (() => {
   async function limpiarBorrador() {
     const f = S.editor;
     if (!f) return;
-    if (guardada(f.codigo)) return;   // ya existía: las fotos pertenecen a la ficha guardada
-    for (const m of await Fotos.byFicha(f.codigo)) await Fotos.remove(m.id);
+    if (miFicha(f.id)) return;   // ya existía: las fotos pertenecen a la ficha guardada
+    for (const m of await Fotos.byFicha(f.id)) await Fotos.remove(m.id);
     S.fotosEditor = [];
   }
 
-  async function borrarFicha(codigo) {
-    if (!confirm(`¿Borrar la ficha de ${codigo} y sus fotografías? El punto volverá a figurar como pendiente.`)) return;
-    await Fotos.removeDeFicha(codigo);
-    await DB.del('fichas', codigo);
-    S.fichas.delete(codigo);
-    if (S.editor && S.editor.codigo === codigo) S.editor = null;
+  async function borrarFicha(id) {
+    const f = miFicha(id);
+    const nombre = f ? `${f.codigo} (${TIPOS[f.tipo || 'ida']})` : id;
+    if (!confirm(`¿Borrar la ficha ${nombre} y sus fotografías?`)) return;
+    await Fotos.removeDeFicha(id);
+    await DB.del('fichas', id);
+    S.fichas.delete(id);
+    if (S.editor && S.editor.id === id) S.editor = null;
     mostrar('puntos');
     renderTodo(); renderDrive();
-    toast('Ficha borrada: el punto quedó libre.', 'ok');
+    toast('Ficha borrada.', 'ok');
   }
 
-  return { init, renderTodo, verDetalle, abrirFicha, completarCroquisPendientes };
+  return { init, renderTodo, verDetalle, abrirFicha };
 })();
 
 document.addEventListener('DOMContentLoaded', () => {

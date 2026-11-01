@@ -1,7 +1,7 @@
 /* Service worker: la app abre y funciona sin conexión.
    - Archivos de la app: caché con actualización en segundo plano.
    - Teselas del mapa satelital: caché con límite (las que ya se vieron o generaron). */
-const VERSION = 'vcab7204b';
+const VERSION = 'v54032439';
 const APP_CACHE = 'ig-app-' + VERSION;
 const TILE_CACHE = 'ig-tiles-v1';
 const MAX_TILES = 3000;
@@ -32,6 +32,29 @@ const APP_FILES = [
   'lib/leaflet/images/marker-icon-2x.png',
   'lib/leaflet/images/marker-shadow.png',
   'lib/jspdf/jspdf.umd.min.js',
+  // croquis de los 22 puntos, generados con herramientas/genera_croquis.py
+  'img/croquis/RG-50-01.jpg',
+  'img/croquis/RG-50-02.jpg',
+  'img/croquis/RG-50-03.jpg',
+  'img/croquis/RG-50-04.jpg',
+  'img/croquis/RG-50-05.jpg',
+  'img/croquis/RG-50-06.jpg',
+  'img/croquis/RG-51-01.jpg',
+  'img/croquis/RG-51-02.jpg',
+  'img/croquis/RG-51-03.jpg',
+  'img/croquis/RG-52-01.jpg',
+  'img/croquis/RG-52-02.jpg',
+  'img/croquis/RG-52-03.jpg',
+  'img/croquis/RG-52-04.jpg',
+  'img/croquis/RG-53-01.jpg',
+  'img/croquis/RG-53-02.jpg',
+  'img/croquis/RG-53-03.jpg',
+  'img/croquis/RG-53-04.jpg',
+  'img/croquis/RG-54-01.jpg',
+  'img/croquis/RG-54-02.jpg',
+  'img/croquis/RG-54-03.jpg',
+  'img/croquis/RG-54-04.jpg',
+  'img/croquis/RG-SF-51-01.jpg',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png'

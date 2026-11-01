@@ -77,17 +77,25 @@ const fotos = [
 ];
 const r = await Drive.subirFicha(ficha, pdf, fotos, () => {});
 check(recibidos.length === 5, 'se enviaron 5 archivos (PDF, 3 fotos y JSON)', 'recibidos=' + recibidos.length);
-check(recibidos[0].nombre === 'RG-50-01.pdf' && recibidos[0].mime === 'application/pdf', 'el PDF va con su nombre y tipo');
-check(recibidos[1].nombre === 'RG-50-01_medicion_1.jpg' && recibidos[2].nombre === 'RG-50-01_placa_2.jpg' && recibidos[3].nombre === 'RG-50-01_acceso_vehicular_1.jpg', 'las fotos van como <código>_medicion_N / _placa_N / <nombre>_N',
+check(recibidos[0].nombre === 'RG-50-01_IDA.pdf' && recibidos[0].mime === 'application/pdf', 'el PDF va con su nombre y tipo');
+check(recibidos[1].nombre === 'RG-50-01_IDA_medicion_1.jpg' && recibidos[2].nombre === 'RG-50-01_IDA_placa_2.jpg' && recibidos[3].nombre === 'RG-50-01_IDA_acceso_vehicular_1.jpg', 'las fotos van como <código>_<IDA|VUELTA>_medicion_N',
   recibidos.slice(1, 3).map((x) => x.nombre).join(', '));
-check(recibidos.every((x) => x.dia === '2026-10-31' && x.punto === 'RG-50-01'), 'todas las peticiones llevan día y código');
+check(recibidos.every((x) => x.carpeta === 'IDA_31_10_2026_RG-50-01' && x.punto === 'RG-50-01'), 'todas las peticiones llevan la carpeta TIPO_dd_mm_aaaa_CÓDIGO');
 check(recibidos.every((x) => x.clave === 'secreta'), 'todas las peticiones llevan la clave');
 const pdfB64 = Buffer.from(recibidos[0].datos, 'base64');
 check(pdfB64.toString() === '%PDF-1.4 prueba', 'el base64 del PDF se decodifica igual');
-check(recibidos[4].nombre === 'datos_RG-50-01.json', 'se envía el JSON de datos');
+check(recibidos[4].nombre === 'datos_RG-50-01_IDA.json', 'se envía el JSON de datos');
 const datos = JSON.parse(Buffer.from(recibidos[4].datos, 'base64').toString());
 check(datos.ficha.codigo === 'RG-50-01' && datos.ficha.inicio === '2026-10-31T09:15', 'el JSON lleva los datos de la ficha');
-check(r.ruta === 'Inspección GNSS - Pedro Moncayo/2026-10-31/RG-50-01', 'la ruta devuelta es carpeta/día/código', r.ruta);
+check(r.ruta === 'Inspección GNSS - Pedro Moncayo/2026_10_31/IDA_31_10_2026_RG-50-01', 'la ruta devuelta es raíz/día/carpeta de la ficha', r.ruta);
+
+/* carpeta con nombre BASE / VUELTA / UNICA */
+for (const caso of [['base', 3, 'BASE3_31_10_2026_RG-50-01'], ['vuelta', null, 'VUELTA_31_10_2026_RG-50-01'], ['unica', null, 'UNICA_31_10_2026_RG-50-01']]) {
+  const n0 = recibidos.length;
+  await Drive.subirFicha({ ...ficha, tipo: caso[0], dia: caso[1] }, pdf, [], () => {});
+  const c = recibidos[n0].carpeta;
+  check(c === caso[2], 'carpeta para ' + caso[0] + ' = ' + caso[2], c);
+}
 
 /* --------- 4) errores (con respuestas simuladas de Google) --------- */
 const URL_GOOGLE = 'https://script.google.com/macros/s/AKfycbzPRUEBA123/exec';   // forma válida

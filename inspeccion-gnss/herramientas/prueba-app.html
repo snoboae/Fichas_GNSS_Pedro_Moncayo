@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -47,12 +47,13 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
     log(`OK ${p.c}: ${Geo.latDMS(ll.lat)} / ${Geo.lonDMS(ll.lon)}`);
     if (Math.abs(ll.lat - 0.0836352) > 1e-6) log('FALLA latitud fuera de tolerancia: ' + ll.lat);
 
-    // 2) croquis con teselas Esri (necesita internet)
-    const t0 = performance.now();
-    const cr = await Croquis.render({ lat: ll.lat, lon: ll.lon, codigo: p.c, e: p.e, n: p.n });
-    log(`OK croquis ${Math.round(cr.dataUrl.length / 1024)} KB, zoom ${cr.z}, teselas=${cr.conTeselas} (${Math.round(performance.now() - t0)} ms)`);
-    if (!cr.conTeselas) log('AVISO sin teselas: revisar internet o el servicio Esri');
-    const img = new Image(); img.src = cr.dataUrl; document.getElementById('visor').appendChild(img);
+    // 2) croquis incluido con la app (img/croquis/<código>.jpg)
+    const urlCro = '../img/croquis/' + p.c + '.jpg';   // la página vive en herramientas/
+    const resCro = await fetch(urlCro);
+    const blobCro = await resCro.blob();
+    const croquisData = await Fotos.blobToDataURL(blobCro);
+    log('OK croquis incluido ' + urlCro + ' · ' + Math.round(blobCro.size / 1024) + ' KB' + (blobCro.size > 50000 ? '' : '  <-- FALLA: no se cargó'));
+    const img = new Image(); img.src = croquisData; document.getElementById('visor').appendChild(img);
 
     // 3) IndexedDB: guardar ficha y foto, leerlas
     const ficha = {      id: p.c, codigo: p.c, nombre: p.nombre, parroquia: p.parroquia, sector: p.sector,
@@ -61,18 +62,11 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
       inicio: '2026-10-31T09:15', fin: '2026-10-31T10:05', fecha: '2026-10-31', operador: 'Prueba automática',
       receptor: 'Gintec G40 Pro', alturaAntena: 1.532, duracionMin: 50,
       metodo: 'Estático diferencial', mascara: 10, intervalo: 1,
-      descripcion: 'Prueba', accesibilidad: 'Prueba', observaciones: 'Prueba',
-      croquis: cr.dataUrl, croquisZ: cr.z, creado: Date.now(), actualizado: Date.now()
+      creado: Date.now(), actualizado: Date.now()
     };
     await DB.put('fichas', ficha);
     const leidas = await DB.all('fichas');
     log(`OK IndexedDB: ${leidas.length} ficha(s) guardada(s)`);
-
-    // 3b) caché de croquis (lo que se prepara en oficina)
-    await DB.put('croquis', { codigo: p.c, dataUrl: cr.dataUrl, z: cr.z, fecha: Date.now() });
-    const cc = await DB.get('croquis', p.c);
-    log('OK caché de croquis: ' + (cc ? Math.round(cc.dataUrl.length / 1024) + ' KB, zoom ' + cc.z : 'NO')) ;
-    await DB.del('croquis', p.c);
 
     // 4) foto: canvas -> blob -> procesar
     const cv = document.createElement('canvas'); cv.width = 1600; cv.height = 1200;
@@ -85,12 +79,12 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
     const metas = await Fotos.byFicha(p.c);
     log(`OK foto guardada (${Math.round(pr.blob.size / 1024)} KB liviana, original ${Math.round(pr.orig.size / 1024)} KB), metas=${metas.length}`);
 
-    // 5) PDF de una hoja
+    // 5) PDF de una hoja (con el croquis incluido)
     const v = await Fotos.paraPDF(pr.blob, 1200);
     const doc = PDF.fichaDoc(ficha, [
       { tipo: 'punto', dataUrl: v.dataUrl, w: v.w, h: v.h },
       { tipo: 'placa', dataUrl: v.dataUrl, w: v.w, h: v.h }
-    ]);
+    ], { dataUrl: croquisData });
     const pdf = doc.output('blob');
     log(`OK PDF ${Math.round(pdf.size / 1024)} KB, páginas=${doc.getNumberOfPages()}` + (doc.getNumberOfPages() === 1 ? '' : '  <-- FALLA: debe ser 1'));
 

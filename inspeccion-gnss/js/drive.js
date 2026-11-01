@@ -155,6 +155,14 @@ const Drive = (() => {
     '.heic': 'image/heic', '.heif': 'image/heif', '.webp': 'image/webp'
   }[ext] || 'application/octet-stream');
 
+  /* Etiqueta del archivo según la sesión: IDA, VUELTA, BASE-D3 o UNICA */
+  const etiquetaFicha = (ficha) => {
+    const tipo = String(ficha.tipo || 'ida').toLowerCase();
+    if (tipo === 'base') return 'BASE-' + (ficha.dia || 1);
+    if (tipo === 'unica') return 'UNICA';
+    return tipo === 'vuelta' ? 'VUELTA' : 'IDA';
+  };
+
   /* "Acceso vehicular" -> "acceso_vehicular" (para el nombre del archivo en Drive) */
   const nombreCorto = (s) => String(s || '')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -167,6 +175,7 @@ const Drive = (() => {
       clave,
       op: 'subir',
       dia: o.dia,
+      carpeta: o.carpeta,
       punto: o.punto,
       nombre: o.nombre,
       mime: o.mime || 'application/octet-stream',
@@ -178,13 +187,21 @@ const Drive = (() => {
   async function subirFicha(ficha, pdfBlob, fotos, onPaso) {
     if (!configurado()) throw new ErrorDrive('Falta configurar la URL y la clave del script de Drive.', 'sin_config');
     const paso = (t) => { if (onPaso) onPaso(t); };
-    const dia = (ficha.fecha || hoyISO()).slice(0, 10);
     const punto = ficha.codigo;
+    const etq = etiquetaFicha(ficha);                       // IDA / VUELTA / BASE-3 / UNICA
+    /* dos niveles:  <raíz>/<aaaa_mm_dd>/<TIPO[+jornada]_dd_mm_aaaa_CÓDIGO>/  */
+    const fecha = (ficha.fecha || hoyISO()).slice(0, 10);
+    const [aa, mm, dd] = fecha.split('-');
+    const dia = `${aa}_${mm}_${dd}`;
+    /* las bases llevan el número de jornada: BASE3_03_11_2026_RG-50-01 */
+    const prefijo = etq.indexOf('BASE') === 0 ? etq.replace('-', '') : etq;
+    const carpeta = `${prefijo}_${dd}_${mm}_${aa}_${punto}`;
+    const base = `${punto}_${etq}`;
     const archivos = [];
 
     paso('Ficha PDF…');
-    await subirArchivo({ dia, punto, nombre: `${punto}.pdf`, mime: 'application/pdf', blob: pdfBlob });
-    archivos.push(`${punto}.pdf`);
+    await subirArchivo({ dia, carpeta, punto, nombre: `${base}.pdf`, mime: 'application/pdf', blob: pdfBlob });
+    archivos.push(`${base}.pdf`);
 
     const lista = fotos || [];
     for (let i = 0; i < lista.length; i++) {
@@ -198,10 +215,10 @@ const Drive = (() => {
       const cuerpo = usarOriginal ? original : (f.blob || original);
       if (!cuerpo) continue;
       const ext = usarOriginal ? extDe(f.nombre, f.origTipo) : '.jpg';
-      const nombre = `${punto}_${n}_${f.orden || (i + 1)}${ext}`;
+      const nombre = `${base}_${n}_${f.orden || (i + 1)}${ext}`;
       paso(`Foto ${i + 1} de ${lista.length}…`);
       await subirArchivo({
-        dia, punto, nombre,
+        dia, carpeta, punto, nombre,
         mime: usarOriginal ? (f.origTipo || mimeDe(ext)) : 'image/jpeg',
         blob: cuerpo
       });
@@ -215,15 +232,15 @@ const Drive = (() => {
       subido: new Date().toISOString()
     }, null, 2);
     await subirArchivo({
-      dia, punto,
-      nombre: `datos_${punto}.json`,
+      dia, carpeta, punto,
+      nombre: `datos_${base}.json`,
       mime: 'application/json',
       blob: new Blob([datos], { type: 'application/json' })
     });
-    archivos.push(`datos_${punto}.json`);
+    archivos.push(`datos_${base}.json`);
 
-    const ruta = `${CONFIG.carpetaProyecto}/${dia}/${punto}`;
-    return { ruta, archivos, dia };
+    const ruta = `${CONFIG.carpetaProyecto}/${dia}/${carpeta}`;
+    return { ruta, archivos, carpeta, dia, fecha };
   }
 
   return {
