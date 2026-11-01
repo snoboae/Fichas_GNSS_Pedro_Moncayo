@@ -37,6 +37,21 @@ function leerFicha(codigo) {
   log('jornadas de base: ' + base.length + ' · primera=' + (base[0] ? base[0].dataset.id : '-') + ' · etiqueta=' + (base[0] ? base[0].querySelector('.tipo').textContent : '-'));
   log('bases sin ruta  : ' + items.filter((x) => /BASE/.test(x.dataset.id)).map((x) => x.dataset.id).filter((id) => !/-BASE-\\d+$/.test(id)).join(',') || 'ninguna');
   log('avance inicial  : ' + d.getElementById('avancePill').textContent);
+  log('entradas base   : ' + items.filter((x) => /BASE/.test(x.dataset.id)).map((x) => x.dataset.id).join(', '));
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const idBase = 'RG-50-01-BASE-' + hoyISO;
+  w.confirm = () => true;
+  const itemBase = d.querySelector('.combo-item[data-id="' + idBase + '"]');
+  log('item de la base : ' + (itemBase ? 'encontrado' : 'NO ENCONTRADO'));
+  if (itemBase) {
+    itemBase.click();
+    await esperar(300);
+    d.getElementById('btnLevantar').click();
+    await esperar(900);
+    log('ficha base      : titulo="' + d.getElementById('f-titulo').textContent.trim() + '" visible=' + !d.getElementById('v-ficha').classList.contains('hidden'));
+    d.getElementById('btnFichaBack').click();
+    await esperar(400);
+  }
 
   // ---- 1) selector de app de mapas ----
   d.getElementById('comboBtn').click();

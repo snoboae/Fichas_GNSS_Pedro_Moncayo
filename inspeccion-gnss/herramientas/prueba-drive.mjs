@@ -90,7 +90,7 @@ check(datos.ficha.codigo === 'RG-50-01' && datos.ficha.inicio === '2026-10-31T09
 check(r.ruta === 'Inspección GNSS - Pedro Moncayo/2026_10_31/IDA_31_10_2026_RG-50-01', 'la ruta devuelta es raíz/día/carpeta de la ficha', r.ruta);
 
 /* carpeta con nombre BASE / VUELTA / UNICA */
-for (const caso of [['base', 3, 'BASE3_31_10_2026_RG-50-01'], ['vuelta', null, 'VUELTA_31_10_2026_RG-50-01'], ['unica', null, 'UNICA_31_10_2026_RG-50-01']]) {
+for (const caso of [['base', 3, 'BASE_31_10_2026_RG-50-01'], ['vuelta', null, 'VUELTA_31_10_2026_RG-50-01'], ['unica', null, 'UNICA_31_10_2026_RG-50-01']]) {
   const n0 = recibidos.length;
   await Drive.subirFicha({ ...ficha, tipo: caso[0], dia: caso[1] }, pdf, [], () => {});
   const c = recibidos[n0].carpeta;

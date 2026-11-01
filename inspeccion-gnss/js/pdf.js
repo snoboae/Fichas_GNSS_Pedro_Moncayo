@@ -166,7 +166,7 @@ const PDF = (() => {
     /* tipo de levantamiento: IDA o VUELTA */
     const tipoFicha = String(f.tipo || 'ida').toLowerCase();
     const chip = tipoFicha === 'vuelta' ? 'VUELTA'
-      : tipoFicha === 'base' ? ('BASE ' + (f.dia || 1))
+      : tipoFicha === 'base' ? ('BASE ' + String(f.fecha || '').slice(8, 10) + '/' + String(f.fecha || '').slice(5, 7))
         : tipoFicha === 'unica' ? 'ÚNICA' : 'IDA';
     const chipW = tipoFicha === 'base' ? 30 : 24, chipH = 6.4;
     const chipX = px - chipW - 4, chipY = by + (bh - chipH) / 2;

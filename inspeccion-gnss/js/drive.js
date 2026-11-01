@@ -158,7 +158,7 @@ const Drive = (() => {
   /* Etiqueta del archivo según la sesión: IDA, VUELTA, BASE-D3 o UNICA */
   const etiquetaFicha = (ficha) => {
     const tipo = String(ficha.tipo || 'ida').toLowerCase();
-    if (tipo === 'base') return 'BASE-' + (ficha.dia || 1);
+    if (tipo === 'base') return 'BASE';
     if (tipo === 'unica') return 'UNICA';
     return tipo === 'vuelta' ? 'VUELTA' : 'IDA';
   };
@@ -194,7 +194,7 @@ const Drive = (() => {
     const [aa, mm, dd] = fecha.split('-');
     const dia = `${aa}_${mm}_${dd}`;
     /* las bases llevan el número de jornada: BASE3_03_11_2026_RG-50-01 */
-    const prefijo = etq.indexOf('BASE') === 0 ? etq.replace('-', '') : etq;
+    const prefijo = etq;
     const carpeta = `${prefijo}_${dd}_${mm}_${aa}_${punto}`;
     const base = `${punto}_${etq}`;
     const archivos = [];

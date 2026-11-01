@@ -24,14 +24,14 @@ internet queda guardada en el teléfono y abre **sin conexión**.
 ## 1. Cómo se usa en campo
 
 Cada punto se levanta **dos veces**: la **IDA** (primera observación, en el orden del recorrido) y la
-**VUELTA** (segunda observación, de regreso). Son **55 fichas planificadas**:
+**VUELTA** (segunda observación, de regreso). Son **37 fichas planificadas** (más las bases de cada día):
 
 - **36** de los 18 puntos de segundo y tercer orden (ida y vuelta, 3 puntos por sesión de 2 h).
-- **18** de los tres de primer orden (`RG-52-03`, `RG-50-01`, `RG-50-06`): **una ficha por jornada**
-  de ocupación como base 8 h (6 jornadas × 3 bases), porque la altura de la antena se mide de nuevo
-  cada vez (trípode, altura inclinada). Si la campaña se alarga, la app ofrece la jornada siguiente
-  (**BASE 7**, **BASE 8**…) sin tener que cambiar nada.
 - **1** de `RG-SF-51-01`, que se mide una sola vez (junto a las bases).
+- **Las bases no se cuentan en el total**: los tres puntos de primer orden (`RG-52-03`, `RG-50-01`,
+  `RG-50-06`) aparecen **una sola vez** en la lista; al levantarlos la app pregunta
+  *"¿Crear una ficha de base para hoy?"* y la ficha del día lleva la fecha en el nombre
+  (`RG-50-01-BASE-2026-11-01`), porque la altura de la antena se mide de nuevo cada jornada.
 
 > **Los días del plan son tentativos.** La app no amarra ningún punto a una fecha: los números
 > (1…18) son el orden del recorrido y las **jornadas** (BASE 1, BASE 2…) son la cantidad de veces
@@ -121,116 +121,18 @@ Inspección GNSS - Pedro Moncayo/          ← la crea el script en el Drive del
       IDA_31_10_2026_RG-52-02/            ← una carpeta por ficha: TIPO_dd_mm_aaaa_CÓDIGO
          RG-52-02_IDA.pdf
          RG-52-02_IDA_medicion_1.jpg
-         RG-52-02_IDA_medicion_2.jpg
          RG-52-02_IDA_placa_1.jpg
          RG-52-02_IDA_acceso_vehicular_1.jpg
          datos_RG-52-02_IDA.json
-      BASE3_31_10_2026_RG-50-01/          ← las bases llevan el número de jornada
-         RG-50-01_BASE-3.pdf
+      BASE_31_10_2026_RG-50-01/           ← base de primer orden (una por día)
+         RG-50-01_BASE.pdf
    2026_11_15/
       VUELTA_15_11_2026_RG-53-01/
-`
-
-Dos niveles: **día** (aaa_mm_dd) y **ficha** (TIPO[jornada]_dd_mm_aaaa_CÓDIGO). El nombre sale
-del tipo de ficha, la **fecha de la ficha** (la misma del PDF) y el código. Antes de crear cada
-carpeta el script **busca por nombre**: si ya existe la reutiliza (aunque se haya movido a mano), de
-modo que nunca se duplican carpetas del mismo día.
-El nombre sale del **tipo de ficha** (IDA, VUELTA, BASE o UNICA), la **fecha de la ficha** (la misma
-del PDF) y el **código**. La app no arma carpetas por día: esas las crea usted en Drive y **arrastra
-cada carpeta** a la del día que corresponda. Si la carpeta ya fue movida y se vuelve a subir la
-misma ficha, el script la busca y la reutiliza (no crea una copia).
-
-
-Si un archivo ya existe con ese nombre, el anterior se envía a la papelera y se crea el nuevo (no
-se duplica). Si la ficha cambia después de subida, vuelve a quedar como *pendiente*.
-
-### Instalación (una sola vez, la hace el dueño de la carpeta)
-
-1. Entrar a **script.google.com** con esa cuenta → **Nuevo proyecto**.
-2. Borrar el contenido y pegar todo el archivo **`herramientas/Code.gs`**.
-3. Cambiar `CLAVE` por una palabra secreta (la misma que se pondrá en la app).
-4. **Implementar → Nueva implementación → Aplicación web**:
-   - *Ejecutar como:* **Yo**
-   - *Quién tiene acceso:* **Cualquier persona**
-5. Autorizar los permisos y **copiar la URL** que termina en `/exec`.
-6. En la app: pestaña **Drive** → revisar la URL, escribir la **CLAVE** → **Guardar y probar**.
-
-> La URL ya viene puesta en `js/config.js` (`driveScriptUrl`). La **clave no se guarda en el
-> código**: se escribe una vez en cada teléfono y queda en el almacenamiento local, para que no
-> quede publicada en el repositorio de GitHub.
-
-> **Si Google responde "403 Acceso denegado"**: la implementación quedó como *Solo yo*. Se
-> corrige en Apps Script → **Implementar → Administrar implementaciones → lápiz (editar)** →
-> *Quién tiene acceso:* **Cualquier persona** → **Implementar**. La misma URL sigue sirviendo.
-
-> **Si cambias el código del script**: no basta con guardar. Hay que **Implementar → Administrar
-> implementaciones → editar → Versión: nueva** y volver a implementar.
-
-Con eso, cualquier teléfono que tenga la app configurada sube a esa carpeta. Los archivos quedan a
-nombre del dueño del script (una cuenta institucional), que es lo deseable para el proyecto.
-
-### Cuotas y el plan de Google One
-
-El plan **Google One Basic (100 GB)** solo cambia el **espacio** disponible: 100 GB en vez de los
-15 GB gratuitos. **No cambia** los límites de Apps Script ni hace falta para nada más:
-
-- Apps Script (cuenta de consumidor): **20.000** llamadas a servicios externos por día, **90 min**
-  de ejecución por día y **6 min** por ejecución. Con 22 fichas se usan ~150 llamadas en total.
-- El tope práctico por archivo es de decenas de MB; por eso la app manda cada archivo por separado.
-- Los archivos subidos **consumen espacio de la cuenta dueña del script**. Con 100 GB hay de sobra
-  (22 puntos × ~6 fotos × 4 MB ≈ 0,5 GB).
-
-En resumen: el plan ayuda por el espacio y la tranquilidad, no por la velocidad ni por permisos.
-
-### Varias personas
-
-- Todos usan **la misma URL y clave**; no hay que invitar a nadie: el script corre con la cuenta
-  del dueño y guarda en su Drive.
-- Cada teléfono guarda las fichas localmente y las sube cuando tiene internet.
-- La clave protege el script: sin ella, cualquiera que descubriera la URL podría subir archivos.
-  Si se filtra, se cambia `CLAVE` y se vuelve a implementar (la app pide la nueva).
-
-## 6. Respaldo
-
-- **Respaldo (.json)**: todas las fichas (sin fotos ni croquis), para pasar los datos a otro
-  teléfono o respaldar antes de actualizar.
-- **Fotos (ZIP)**: todas las fotografías con un índice CSV.
-- **Avance (CSV)** y **puntos (GeoJSON)**: para revisar el avance en Excel/QGIS.
-- Los datos viven **en el teléfono** (IndexedDB). La nube es Drive, y solo sube lo que se pide.
-
-## 7. Sin internet
-
-- La app abre y funciona completa: fichas, fotos, PDF, respaldo y cálculos.
-- **El croquis y la subida a Drive se completan solos** cuando vuelve el internet (el croquis de
-  las fichas guardadas, y la subida si se tiene la subida automática activada).
-- El botón **Mi ubicación** del detalle usa el GPS del teléfono (no necesita datos) y muestra la
-  distancia y el rumbo hasta el punto.
-
-## 8. Publicar la app (GitHub Pages) con el API KEY
-
-El publicador está **en la carpeta de arriba** (`Inspección Geocaliza/publicar.bat`), junto a esta
-carpeta, y publica solo `inspeccion-gnss/` (no toca el resto del repositorio).
-
-Doble clic en **`publicar.bat`**. El script:
-
-1. **Pide el API KEY (token) de GitHub** la primera vez. Se pega sin que se vea en pantalla y queda
-   guardado en el **Administrador de credenciales de Windows**; las siguientes veces no lo pide
-   (con `publicar.bat -GuardarToken` se reemplaza). Crear el token en GitHub →
-   *Settings → Developer settings → Personal access tokens*: token clásico con permiso **`repo`**
-   (lo más simple, permite crear repositorios) o fine-grained con *Contents*, *Pages* y
-   *Administration*.
-2. Muestra **la lista de tus repositorios** y permite:
-   - escribir el **número** de uno existente, o
-   - escribir un **nombre nuevo** → lo **crea** (público, que es lo que GitHub Pages necesita) y
-     activa Pages en la rama `gh-pages`.
-   Si ya hay un repositorio recordado, primero pregunta: *Enter* para usarlo, o el nombre de otro
-   (existente o nuevo). Con `-Nuevo` obliga a pedir el nombre desde cero.
-3. Publica la app en la subcarpeta `inspeccion-gnss/` y actualiza la versión de `sw.js` para que
-   los teléfonos se actualicen solos.
-4. Al terminar **imprime el enlace para compartir**, lo **copia al portapapeles** y lo deja
-   anotado en `Inspección Geocaliza/publicar.url.txt`:
-
 ```
+
+Dos niveles: **día** (`aaaa_mm_dd`) y **ficha** (`TIPO_dd_mm_aaaa_CÓDIGO`). Antes de crear cada
+carpeta el script **busca por nombre**: si ya existe la reutiliza, de modo que nunca se duplican
+carpetas del mismo día.
 https://USUARIO.github.io/REPOSITORIO/inspeccion-gnss/
 ```
 

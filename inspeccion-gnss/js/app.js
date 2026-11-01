@@ -35,19 +35,9 @@ const App = (() => {
     ['ida', 'vuelta'].forEach((tipo) => {
       (plan[tipo] || []).forEach((codigo, i) => out.push({ id: idFicha(codigo, tipo), codigo, tipo, n: i + 1, plan: true }));
     });
-    /* Bases de primer orden: una ficha por jornada de ocupación. Las jornadas son
-       tentativas: se muestran las previstas y una más, para poder agregar la siguiente
-       cuando el trabajo se alargue. */
-    const diasBase = plan.diasBase || 6;
+    /* Primer orden: una sola entrada por base. La ficha se crea para el día que se levanta. */
     (plan.base || []).forEach((codigo) => {
-      const hechas = Array.from(S.fichas.keys())
-        .map((id) => { const m = new RegExp('^' + codigo + '-BASE-(\\d+)$').exec(id); return m ? Number(m[1]) : 0; })
-        .filter((n) => n > 0);
-      const ultima = hechas.length ? Math.max.apply(null, hechas) : 0;
-      const total = Math.max(diasBase, ultima + 1);
-      for (let j = 1; j <= total; j++) {
-        out.push({ id: idFicha(codigo, 'base', j), codigo, tipo: 'base', dia: j, n: null, plan: true, rol: 'base' });
-      }
+      out.push({ id: idBase(codigo), codigo, tipo: 'base', rol: 'base', n: null, plan: true });
     });
     /* punto adicional: una sola medición */
     (plan.unica || []).forEach((codigo) => {
@@ -60,9 +50,20 @@ const App = (() => {
     });
     return out;
   }
+  /* Las bases se listan una sola vez; la ficha se crea para el día en que se levanta y su
+     id lleva la fecha, igual que la carpeta en Drive: RG-50-01-BASE-2026-11-01. */
+  const idBase = (codigo, fecha) => `${codigo}-BASE-${fecha || hoy()}`;
+  const fichasBase = (codigo) => Array.from(S.fichas.values())
+    .filter((f) => f.tipo === 'base' && f.codigo === codigo)
+    .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+  const baseDeHoy = (codigo) => {
+    const f = fichasBase(codigo).find((x) => x.fecha === hoy());
+    return f || null;
+  };
+
   const planificadas = () => (typeof RUTA === 'undefined' ? 0
     : (RUTA.ida || []).length + (RUTA.vuelta || []).length
-      + (RUTA.base || []).length * (RUTA.diasBase || 6) + (RUTA.unica || []).length);
+      + (RUTA.unica || []).length);
 
   /* ---------------- estado ---------------- */
   const S = {
@@ -132,8 +133,7 @@ const App = (() => {
   }
 
   /* ---------------- puntos ---------------- */
-  const badge = (tipo, dia) => `<span class="tipo ${tipo}">${TIPOS[tipo] || tipo}` +
-  (String(tipo).toLowerCase() === 'base' ? ` ${dia || 1}` : '') + '</span>';
+  const badge = (tipo) => `<span class="tipo ${tipo}">${TIPOS[tipo] || tipo}</span>`;
 
   function renderCombo() {
     const q = String($('comboQ').value || '').toLowerCase().trim();
@@ -147,11 +147,11 @@ const App = (() => {
     for (const s of lista) {
       if (!s.plan && !separador) { separador = true; html += '<div class="combo-sep">Sin ruta asignada</div>'; }
       const p = P(s.codigo) || {};
-      const ok = !!miFicha(s.id);
+      const ok = s.rol === 'base' ? !!baseDeHoy(s.codigo) : !!miFicha(s.id);
       html += `<button type="button" class="combo-item${ok ? ' saved' : ''}${S.sel && S.sel.id === s.id ? ' sel' : ''}" data-id="${esc(s.id)}" role="option">
         <span class="ck">✓</span>
         <span class="num">${s.n ? s.n : '–'}</span>
-        <span class="txt"><b>${esc(s.codigo)}</b> ${badge(s.tipo, s.dia)}<span class="s">${esc(p.parroquia || '')} · ${esc(p.mat || '')}</span></span>
+        <span class="txt"><b>${esc(s.codigo)}</b> ${badge(s.tipo, s.dia)}<span class="s">${esc(p.parroquia || '')} · ${s.rol === 'base' ? 'base de primer orden' : esc(p.mat || '')}</span></span>
       </button>`;
     }
     $('comboList').innerHTML = html || '<p class="hint" style="padding:14px">Sin resultados.</p>';
@@ -159,9 +159,9 @@ const App = (() => {
 
   function renderAvance() {
     const total = planificadas() || sesiones().length;
-    const hechas = sesiones().filter((s) => s.plan && miFicha(s.id)).length;
-    const extras = sesiones().filter((s) => !s.plan && miFicha(s.id)).length;
-    $('avancePill').textContent = `${hechas} / ${total}` + (extras ? ` (+${extras})` : '');
+    const hechas = sesiones().filter((s) => s.plan && s.rol !== 'base' && miFicha(s.id)).length;
+    const bases = Array.from(S.fichas.values()).filter((f) => f.tipo === 'base').length;
+    $('avancePill').textContent = `${hechas} / ${total}` + (bases ? ` · ${bases} base(s)` : '');
     $('progressBar').style.width = (hechas / Math.max(1, total) * 100).toFixed(1) + '%';
   }
 
@@ -179,7 +179,8 @@ const App = (() => {
     $('comboBtn').setAttribute('aria-expanded', 'false');
     $('btnIr').disabled = false;
     $('btnLevantar').disabled = false;
-    $('btnLevantar').querySelector('span:last-child').firstChild.textContent = miFicha(id) ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
+    const tiene = s.rol === 'base' ? !!baseDeHoy(s.codigo) : !!miFicha(id);
+    $('btnLevantar').querySelector('span:last-child').firstChild.textContent = tiene ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
     pintarPanelPunto();
     renderCombo();
   }
@@ -196,13 +197,16 @@ const App = (() => {
   function pintarPanelPunto() {
     const s = S.sel; if (!s) return;
     const p = P(s.codigo); if (!p) return;
-    const f = miFicha(s.id);
+    const esBase = s.rol === 'base';
+    const f = esBase ? baseDeHoy(s.codigo) : miFicha(s.id);
+    const jornadas = esBase ? fichasBase(s.codigo).length : 0;
     const otraTipo = s.tipo === 'ida' ? 'vuelta' : 'ida';
     const otra = miFicha(idFicha(s.codigo, otraTipo));
     const totalTipo = ((typeof RUTA !== 'undefined' && RUTA[s.tipo]) || []).length;
     $('panelPunto').classList.remove('hidden');
     $('pp-nombre').innerHTML = esc(p.c) + ' ' + badge(s.tipo, s.dia);
-    const detalleRuta = s.rol === 'base' ? ` · jornada ${s.dia || 1} · base de referencia (8 h)`
+    const detalleRuta = esBase
+      ? ` · base de primer orden · ${jornadas} jornada(s) registrada(s)`
       : s.rol === 'unica' ? ' · medición única'
         : s.n ? ` · ${TIPOS[s.tipo]} ${s.n} de ${totalTipo}` : ' · sin ruta asignada';
     $('pp-sub').textContent = `${p.parroquia} · ${p.orden}° orden · ${p.mat}` + detalleRuta;
@@ -211,8 +215,9 @@ const App = (() => {
       ['NORTE (Y)', p.n.toLocaleString('es-EC')],
       ['ZONA / DATUM', `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`],
       ['SECTOR / SITIO', p.sector],
-      [TIPOS[s.tipo], f ? (f.drive && f.drive.estado === 'subida' ? 'Guardada · en Drive' : 'Guardada en el teléfono') : 'Pendiente de levantar'],
-      [TIPOS[otraTipo], otra ? 'Ya levantada' : 'Pendiente'],
+      [esBase ? 'HOY' : TIPOS[s.tipo], f ? (f.drive && f.drive.estado === 'subida' ? 'Guardada · en Drive' : 'Guardada en el teléfono') : 'Pendiente de levantar'],
+      esBase ? ['ÚLTIMA', jornadas ? `Del ${PDF.fmtFecha(fichasBase(s.codigo)[0].fecha)}` : '—']
+        : [TIPOS[otraTipo], otra ? 'Ya levantada' : 'Pendiente'],
       ['FICHA', f ? `Del ${PDF.fmtFecha(f.fecha)}` : '—']
     ].map(([k, v]) => `<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
     $('btnVerFicha').classList.toggle('hidden', !f);
@@ -279,7 +284,12 @@ const App = (() => {
   }
 
   async function abrirFicha(id) {
-    const s = sesiones().find((x) => x.id === id);
+    let s = sesiones().find((x) => x.id === id);
+    if (!s) {
+      /* ficha de base creada para un día concreto: RG-50-01-BASE-2026-11-01 */
+      const m = /^(.+)-BASE-(\d{4}-\d{2}-\d{2})$/.exec(String(id));
+      if (m && P(m[1])) s = { id, codigo: m[1], tipo: 'base', rol: 'base', n: null };
+    }
     if (!s) return;
     const p = P(s.codigo); if (!p) return;
     const f = miFicha(id);
@@ -290,6 +300,15 @@ const App = (() => {
     pintarFotosEditor();
     mostrar('ficha');
     if (!$('f-extra-nombre').value) $('f-extra-nombre').value = '';
+  }
+
+  /* Al levantar una base se pregunta si es para hoy; si ya existe la de hoy, se edita. */
+  async function levantarBase(codigo) {
+    const ya = baseDeHoy(codigo);
+    if (ya) { abrirFicha(ya.id); return; }
+    const hoyTxt = hoy().split('-').reverse().join('/');
+    if (!confirm(`¿Crear una ficha de base para hoy (${hoyTxt})?\n\nBase ${codigo} · primer orden · 8 h`)) return;
+    await abrirFicha(idBase(codigo, hoy()));
   }
 
   /* Compatibilidad con fichas guardadas por versiones anteriores. */
@@ -721,7 +740,7 @@ const App = (() => {
     $('driveUrl').value = Drive.urlActual() || '';
     $('driveClave').value = Drive.claveActual() || '';
 
-    const todas = sesiones().map((s) => miFicha(s.id)).filter(Boolean);
+    const todas = Array.from(S.fichas.values());
     const total = todas.length;
     const subidas = todas.filter((f) => f.drive && f.drive.estado === 'subida').length;
     const errores = todas.filter((f) => f.drive && f.drive.estado === 'error').length;
@@ -730,9 +749,9 @@ const App = (() => {
     $('autoSubir').checked = !!S.ajustes.autoSubir;
     $('borrarOrig').checked = !!S.ajustes.borrarOrig;
 
-    $('driveCola').innerHTML = sesiones().map((s) => {
-      const f = miFicha(s.id);
-      if (!f) return '';
+    $('driveCola').innerHTML = Array.from(S.fichas.values())
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
+      .map((f) => {
       const e = (f.drive && f.drive.estado) || 'pend';
       const cls = e === 'subida' ? 'sub' : e === 'error' ? 'err' : 'pend';
       const txt = e === 'subida' ? 'En Drive' : e === 'error' ? 'Error' : 'Pendiente';
@@ -754,12 +773,22 @@ const App = (() => {
     const cols = ['id', 'codigo', 'tipo', 'jornada', 'grupo', 'sesion', 'parroquia', 'sector', 'orden', 'este', 'norte', 'materializacion',
       'receptor', 'altura_antena', 'inicio', 'fin', 'duracion_min', 'metodo', 'mascara', 'intervalo',
       'operador', 'fotos_medicion', 'fotos_placa', 'fotos_extra', 'croquis', 'drive'];
-    const filas = sesiones().map((s) => {
+    /* las bases llevan una fila por jornada registrada */
+    const trabajo = [];
+    sesiones().forEach((s) => {
+      if (s.rol === 'base') {
+        const lista = fichasBase(s.codigo);
+        if (!lista.length) trabajo.push({ s, f: null });
+        else lista.forEach((f) => trabajo.push({ s, f }));
+      } else trabajo.push({ s, f: miFicha(s.id) });
+    });
+    const filas = trabajo.map(({ s, f }) => {
       const p = P(s.codigo) || {};
-      const f = miFicha(s.id);
       const c = por[s.id] || { punto: 0, placa: 0, extra: 0 };
       const d = f || {};
-      return [s.id, s.codigo, s.tipo, s.dia || '', (d.grupo || ''), s.n || '', p.parroquia, d.sector || p.sector, p.orden, p.e, p.n,
+      const idFila = f ? f.id : s.id;
+      const jornada = f && f.fecha ? f.fecha : (s.dia || '');
+      return [idFila, s.codigo, s.tipo, jornada, (d.grupo || ''), s.n || '', p.parroquia, d.sector || p.sector, p.orden, p.e, p.n,
         d.materializacion || p.mat, d.receptor || '', d.alturaAntena || '', d.inicio || '', d.fin || '',
         d.duracionMin || '', d.metodo || METODO, d.mascara || MASCARA, d.intervalo || INTERVALO,
         d.operador || '', c.punto, c.placa, c.extra,
@@ -787,6 +816,7 @@ const App = (() => {
           operador_ida: ida ? ida.operador || '' : '', operador_vuelta: vuelta ? vuelta.operador || '' : '',
           receptor_ida: ida ? ida.receptor || '' : '', receptor_vuelta: vuelta ? vuelta.receptor || '' : '',
           dur_ida: ida ? ida.duracionMin || '' : '', dur_vuelta: vuelta ? vuelta.duracionMin || '' : '',
+          base_jornadas: fichasBase(p.c).length,
           croquis: 'incluido',
           drive_ida: (ida && ida.drive && ida.drive.estado) || '', drive_vuelta: (vuelta && vuelta.drive && vuelta.drive.estado) || ''
         }
@@ -1071,9 +1101,21 @@ const App = (() => {
     $('btnIr').addEventListener('click', () => S.sel && abrirNav(S.sel.codigo));
     document.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => navegar(b.dataset.nav, S.navCod)));
     document.querySelectorAll('[data-nav-close]').forEach((b) => b.addEventListener('click', cerrarNav));
-    $('btnLevantar').addEventListener('click', () => S.sel && abrirFicha(S.sel.id));
-    $('btnVerFicha').addEventListener('click', () => S.sel && verDetalle(S.sel.id));
-    $('btnBorrarFicha').addEventListener('click', () => S.sel && borrarFicha(S.sel.id));
+    $('btnLevantar').addEventListener('click', () => {
+      if (!S.sel) return;
+      if (S.sel.rol === 'base') levantarBase(S.sel.codigo);
+      else abrirFicha(S.sel.id);
+    });
+    $('btnVerFicha').addEventListener('click', () => {
+      if (!S.sel) return;
+      const id = S.sel.rol === 'base' ? ((baseDeHoy(S.sel.codigo) || fichasBase(S.sel.codigo)[0] || {}).id) : S.sel.id;
+      if (id) verDetalle(id);
+    });
+    $('btnBorrarFicha').addEventListener('click', () => {
+      if (!S.sel) return;
+      const id = S.sel.rol === 'base' ? ((baseDeHoy(S.sel.codigo) || {}).id) : S.sel.id;
+      if (id) borrarFicha(id);
+    });
 
     $('btnFichaBack').addEventListener('click', async () => {
       await limpiarBorrador();
@@ -1139,20 +1181,37 @@ const App = (() => {
       } finally { busy(false); }
     });
 
-    /* Abrir la carpeta: usa el enlace guardado; si no hay, consulta el script y la abre. */
+    /* Abrir la carpeta en Drive.
+       La pestaña se abre al instante (dentro del toque) porque si se abre después de
+       esperar la respuesta del script, el navegador la bloquea como ventana emergente. */
     $('btnAbrirCarpeta').addEventListener('click', async () => {
-      let url = await DB.kvGet('drive.raizUrl', '');
+      const ventana = window.open('', '_blank');
+      let url = '';
+      try { url = await DB.kvGet('drive.raizUrl', ''); } catch (e) { url = ''; }
       if (!url && Drive.configurado()) {
         busy(true, 'Consultando la carpeta en Drive…');
         try {
           const r = await Drive.probar();
           url = r.raizUrl || '';
           if (url) await DB.kvSet('drive.raizUrl', url);
-        } catch (e) { toast(e.message, 'err'); }
-        finally { busy(false); }
+        } catch (e) {
+          if (ventana) ventana.close();
+          toast(e.message, 'err');
+          $('driveCarpetaMsg').textContent = e.message;
+          return;
+        } finally { busy(false); }
       }
-      if (!url) { toast('Primero pulsa "Guardar y probar" para conectar con el script.', 'err'); return; }
-      window.open(url, '_blank', 'noopener');
+      if (!url) {
+        if (ventana) ventana.close();
+        toast('Primero pulsa "Guardar y probar" para conectar con el script.', 'err');
+        return;
+      }
+      if (ventana) ventana.location.replace(url);
+      else {
+        /* si el navegador bloqueó la pestaña, se deja un enlace grande para tocar */
+        $('driveCarpetaMsg').innerHTML = `No se pudo abrir sola. Toca aquí: <a href="${esc(url)}" target="_blank" rel="noopener">abrir la carpeta en Drive</a>`;
+        toast('Toca el enlace "abrir la carpeta en Drive".', 'err');
+      }
     });
 
     $('btnSubirTodo').addEventListener('click', () => subirPendientes(false));
