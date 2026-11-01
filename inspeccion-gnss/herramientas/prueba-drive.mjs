@@ -1,4 +1,4 @@
-﻿/* Prueba del módulo de Drive sin Google (solo desarrollo).
+/* Prueba del módulo de Drive sin Google (solo desarrollo).
    - Levanta un servidor local que imita al script de Apps Script.
    - Comprueba el envío de la ficha completa (PDF + fotos + JSON) y el manejo de errores.
    Uso: node herramientas/prueba-drive.mjs */
@@ -72,19 +72,20 @@ const ficha = {
 };
 const fotos = [
   { tipo: 'punto', orden: 1, nombre: 'IMG_1.jpg', orig: fotoGrande, blob: fotoGrande, origTipo: 'image/jpeg' },
-  { tipo: 'placa', orden: 2, nombre: 'IMG_2.jpg', orig: fotoGrande, blob: fotoGrande, origTipo: 'image/jpeg' }
+  { tipo: 'placa', orden: 2, nombre: 'IMG_2.jpg', orig: fotoGrande, blob: fotoGrande, origTipo: 'image/jpeg' },
+  { tipo: 'extra', orden: 1, etiqueta: 'Acceso vehicular', nombre: 'IMG_3.jpg', orig: fotoGrande, blob: fotoGrande, origTipo: 'image/jpeg' }
 ];
 const r = await Drive.subirFicha(ficha, pdf, fotos, () => {});
-check(recibidos.length === 4, 'se enviaron 4 archivos (PDF, 2 fotos y JSON)', 'recibidos=' + recibidos.length);
+check(recibidos.length === 5, 'se enviaron 5 archivos (PDF, 3 fotos y JSON)', 'recibidos=' + recibidos.length);
 check(recibidos[0].nombre === 'RG-50-01.pdf' && recibidos[0].mime === 'application/pdf', 'el PDF va con su nombre y tipo');
-check(recibidos[1].nombre === 'RG-50-01_punto_1.jpg' && recibidos[2].nombre === 'RG-50-01_placa_2.jpg', 'las fotos van como <código>_punto_N / _placa_N',
+check(recibidos[1].nombre === 'RG-50-01_medicion_1.jpg' && recibidos[2].nombre === 'RG-50-01_placa_2.jpg' && recibidos[3].nombre === 'RG-50-01_acceso_vehicular_1.jpg', 'las fotos van como <código>_medicion_N / _placa_N / <nombre>_N',
   recibidos.slice(1, 3).map((x) => x.nombre).join(', '));
 check(recibidos.every((x) => x.dia === '2026-10-31' && x.punto === 'RG-50-01'), 'todas las peticiones llevan día y código');
 check(recibidos.every((x) => x.clave === 'secreta'), 'todas las peticiones llevan la clave');
 const pdfB64 = Buffer.from(recibidos[0].datos, 'base64');
 check(pdfB64.toString() === '%PDF-1.4 prueba', 'el base64 del PDF se decodifica igual');
-check(recibidos[3].nombre === 'datos_RG-50-01.json', 'se envía el JSON de datos');
-const datos = JSON.parse(Buffer.from(recibidos[3].datos, 'base64').toString());
+check(recibidos[4].nombre === 'datos_RG-50-01.json', 'se envía el JSON de datos');
+const datos = JSON.parse(Buffer.from(recibidos[4].datos, 'base64').toString());
 check(datos.ficha.codigo === 'RG-50-01' && datos.ficha.inicio === '2026-10-31T09:15', 'el JSON lleva los datos de la ficha');
 check(r.ruta === 'Inspección GNSS - Pedro Moncayo/2026-10-31/RG-50-01', 'la ruta devuelta es carpeta/día/código', r.ruta);
 

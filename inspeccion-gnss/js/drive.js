@@ -155,6 +155,11 @@ const Drive = (() => {
     '.heic': 'image/heic', '.heif': 'image/heif', '.webp': 'image/webp'
   }[ext] || 'application/octet-stream');
 
+  /* "Acceso vehicular" -> "acceso_vehicular" (para el nombre del archivo en Drive) */
+  const nombreCorto = (s) => String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+
   /* ---------------- subida ---------------- */
   async function subirArchivo(o) {
     const datos = await aBase64(o.blob);
@@ -184,7 +189,10 @@ const Drive = (() => {
     const lista = fotos || [];
     for (let i = 0; i < lista.length; i++) {
       const f = lista[i];
-      const n = f.tipo === 'placa' ? 'placa' : 'punto';
+      /* medición y placa van con nombre fijo; las adicionales con su nombre */
+      const n = f.tipo === 'placa' ? 'placa'
+        : f.tipo === 'extra' ? (nombreCorto(f.etiqueta) || 'extra')
+          : 'medicion';
       const original = f.orig || null;
       const usarOriginal = original && original.size <= (CONFIG.fotoMaxDriveMB || 8) * 1024 * 1024;
       const cuerpo = usarOriginal ? original : (f.blob || original);

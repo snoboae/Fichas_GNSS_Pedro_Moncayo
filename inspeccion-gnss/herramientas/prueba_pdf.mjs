@@ -40,9 +40,7 @@ const ficha = {
   inicio: '2026-10-31T09:15', fin: '2026-10-31T10:05', fecha: '2026-10-31',
   operador: 'Saúl Chicaiza', receptor: 'Hi-Target V90', alturaAntena: 1.532,
   metodo: 'Estático diferencial', mascara: 10, intervalo: 1, duracionMin: 50,
-  descripcion: 'El punto se encuentra en el mirador de Mojanda, sobre el borde del talud norte, a 4 m del sendero principal y a 12 m del letrero del área protegida.',
-  accesibilidad: 'Desde Tabacundo por la vía a las Lagunas de Mojanda, 18 km hasta el mirador; el último tramo es de lastre en buen estado.',
-  observaciones: 'Se socializó con el guardaparque de turno. Viento moderado durante la sesión; sin interferencias de líneas de alta tensión.',
+
   croquis, croquisZ: 18
 };
 const fotos = sinFotos ? [] : [
@@ -53,7 +51,7 @@ const fotos = sinFotos ? [] : [
 if (minimo) {
   Object.assign(ficha, {
     inicio: '', fin: '', fecha: '', operador: '', receptor: '', alturaAntena: null,
-    duracionMin: 0, descripcion: '', accesibilidad: '', observaciones: '', croquis: null
+    duracionMin: 0, croquis: null
   });
 }
 

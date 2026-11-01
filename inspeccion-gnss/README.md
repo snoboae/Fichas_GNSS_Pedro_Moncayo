@@ -30,12 +30,13 @@ internet queda guardada en el teléfono y abre **sin conexión**.
 3. Se completan los datos de la observación, se toman las fotos y se pulsa **Guardar ficha**.
 4. El punto queda con **✓ verde** en la lista desplegable y en la lista de puntos.
 
-Campos con candado (🔒) = vienen del diseño de la red y no se editan:
+Campos con candado (🔒) = vienen del diseño de la red y no se pueden editar:
 
-| Se llena automáticamente | Lo llena el operador en campo |
+| Se llena automáticamente (solo lectura) | Lo llena el operador en campo |
 |---|---|
-| Código, nombre del punto, parroquia, sector/sitio, orden, coordenada X e Y (UTM 17S), materialización propuesta, fecha (la del inicio) | Receptor GNSS, altura de la antena, **inicio** y **fin** (fecha y hora juntos), operador, fotografía del punto, fotografía de la placa, descripción, accesibilidad y observaciones |
+| Código (es el identificador del punto), parroquia, sector/sitio, orden, coordenada X e Y (UTM 17S), materialización | Receptor GNSS, altura de la antena, **inicio** y **fin** (fecha y hora, con botón **Ahora**), operador, fotografía de la medición, fotografía de la placa y fotos adicionales con su nombre |
 
+La **fecha de la ficha** es la del inicio de la observación; la duración se calcula sola.
 **Fijo por el TR (no se pide):** posicionamiento **estático diferencial**, máscara **10°**,
 intervalo **1 s**. La app lo imprime en la ficha.
 
@@ -60,30 +61,33 @@ ya está listo.
 
 ## 3. Fotografías
 
-- **Del punto** y **de la placa**. Se pueden tomar con la cámara o elegir de la galería.
-- En la ficha se imprimen **dos**: la **primera** foto del punto y la **primera** de la placa.
-- Las **adicionales** se guardan y se suben a Drive, pero no se imprimen (así lo indica la app en
-  cada foto: *"En la ficha"* / *"Solo Drive"*).
+En la ficha hay tres bloques:
+
+1. **Fotografía de la medición** — el punto con el equipo montado. Es la que se imprime.
+2. **Fotografía de la placa** — primer plano de la placa o del mojón. Es la que se imprime.
+3. **Agregar más fotos** — fotos adicionales (accesos, entorno, detalles). Antes de tomarlas se
+   escribe el **nombre de la foto** para identificarla; se suben a Drive con ese nombre y **no** se
+   imprimen.
+
+- Se pueden tomar con la cámara o elegir de la galería.
 - Se guardan **dos versiones**: el **original de la cámara** (alta resolución, es el que se sube a
   Drive) y una **copia liviana de 1600 px** para la ficha y el PDF. Si el original supera 8 MB, a
-  Drive se envía una copia de 3000 px (sigue siendo alta resolución).
+  Drive se envía una copia de 3000 px.
 - En la pestaña Drive hay una opción para **liberar los originales** después de subirlos.
-
 ## 4. La ficha (PDF de una sola hoja)
 
-A4 horizontal, una página, con los logos del GAD Pedro Moncayo y de Geocaliza:
+A4 horizontal, una página, con los logos del GAD Pedro Moncayo y de Geocaliza. El título es el
+proyecto y el punto se identifica por su **código**:
 
-1. **Identificación del punto** — nombre, código, orden, fecha, provincia, cantón, parroquia, sector.
+1. **Identificación del punto** — código, orden, parroquia, fecha, provincia, cantón y sector/sitio.
 2. **Ubicación, materialización y observación** — Este/Norte, zona UTM y datum, método y parámetros
-   del TR; materialización, receptor, altura de antena y **inicio – fin** de la observación.
+   del TR; materialización, receptor, altura de antena e **inicio – fin** de la observación.
 3. **Croquis de ubicación** (imagen satelital).
-4. **Registro fotográfico** — foto del punto y foto de la placa.
-5. **Observaciones y accesibilidad**.
-6. **Firma del operador** y una nota que aclara que es un registro de campo.
+4. **Registro fotográfico** — foto de la medición y foto de la placa.
+5. **Firma del operador** y una nota que aclara que es un documento de campo.
 
 Desde **Detalle** se puede descargar o compartir el PDF, exportar el punto a GeoJSON o descargar
 las fotos en un ZIP. Ejemplo: `../Ejemplos fichas/Ejemplo ficha RG-50-01 (una hoja).pdf`.
-
 ## 5. Google Drive (sin OAuth, con un script de Google)
 
 La app sube los archivos a un **Google Apps Script** publicado por el dueño de la carpeta. No hay

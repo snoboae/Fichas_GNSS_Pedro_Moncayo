@@ -61,12 +61,13 @@ const Fotos = (() => {
 
   /* Guarda foto + metadatos en una transacción. */
   async function add(rec) {
-    const { id, fichaId, tipo, blob, orig, thumb, w, h, orden, nombre } = rec;
+    const { id, fichaId, tipo, blob, orig, thumb, w, h, orden, nombre, etiqueta } = rec;
     await DB.txm(['photos', 'pmeta'], 'readwrite', (s) => {
       s.photos.put({ id, fichaId, tipo, blob, orig: orig || null });
       s.pmeta.put({
         id, fichaId, tipo, thumb, w, h, orden: orden || 0,
         nombre: nombre || 'foto.jpg',
+        etiqueta: etiqueta || '',
         origBytes: orig ? orig.size : 0,
         origTipo: orig ? (orig.type || 'image/jpeg') : '',
         tieneOrig: !!orig,
@@ -75,8 +76,14 @@ const Fotos = (() => {
     });
   }
 
+  /* Orden de los grupos: medición, placa y adicionales. */
+  const GRUPO = { punto: 0, placa: 1, extra: 2 };
   const byFicha = (id) => DB.byIndex('pmeta', 'fichaId', id)
-    .then((rows) => rows.sort((a, b) => (a.tipo === b.tipo ? (a.orden || 0) - (b.orden || 0) : (a.tipo === 'punto' ? -1 : 1))));
+    .then((rows) => rows.sort((a, b) => {
+      const ga = GRUPO[a.tipo] == null ? 9 : GRUPO[a.tipo];
+      const gb = GRUPO[b.tipo] == null ? 9 : GRUPO[b.tipo];
+      return ga !== gb ? ga - gb : (a.orden || 0) - (b.orden || 0);
+    }));
 
   const getBlob = async (id) => { const r = await DB.get('photos', id); return r ? r.blob : null; };
   const getOrig = async (id) => { const r = await DB.get('photos', id); return r ? r.orig : null; };

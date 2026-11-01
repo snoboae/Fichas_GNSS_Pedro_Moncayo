@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Prueba de interfaz</title></head>
+<body>
+<pre id="out">Cargando…</pre>
+<iframe id="app" src="../index.html" style="width:1000px;height:700px;border:1px solid #ccc" title="app"></iframe>
+<script>
+/* Comprueba la interfaz simplificada: selección directa sin hoja emergente,
+   campos de solo lectura, botones "Ahora", fotos en tres bloques y ausencia de
+   las secciones retiradas. */
+const out = document.getElementById('out');
+const log = (m) => { out.textContent += '\n' + m; };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const ifr = document.getElementById('app');
+
+(async () => {
+  let w = ifr.contentWindow;
+  for (let i = 0; i < 40; i++) { await esperar(300); if (w.document.body.dataset.listo === '1') break; }
+  const d = w.document;
+  await esperar(300);
+  log('arranque          : ' + (d.body.dataset.listo || 'no'));
+
+  // secciones retiradas
+  log('sin hoja emergente: ' + !d.getElementById('sheet'));
+  log('sin buscador lista: ' + !d.getElementById('q') + ' / lista=' + !d.getElementById('listaPuntos'));
+  log('sin mapa en puntos: ' + !d.getElementById('btnMapaPunto'));
+  log('sin datos proyecto: ' + !d.getElementById('a-carpeta'));
+  log('sin "cómo conectar": ' + !d.getElementById('carpetaNombre'));
+  log('sin prueba browser: ' + !d.getElementById('btnAbrirPing'));
+  log('sin descripción   : ' + !d.getElementById('f-desc') + ' obs=' + !d.getElementById('f-obs'));
+  log('sin nombre punto  : ' + !d.getElementById('f-nombre'));
+
+  // seleccionar un punto desde el combo (sin hoja)
+  d.getElementById('comboBtn').click();
+  await esperar(200);
+  const item = d.querySelector('.combo-item[data-cod="RG-51-02"]');
+  item.click();
+  await esperar(300);
+  const panel = d.getElementById('panelPunto');
+  log('panel del punto   : visible=' + !panel.classList.contains('hidden') + ' titulo="' + d.getElementById('pp-nombre').textContent + '"');
+  log('botones activos   : ir=' + !d.getElementById('btnIr').disabled + ' levantar=' + !d.getElementById('btnLevantar').disabled);
+  log('rotulo levantar   : ' + d.getElementById('btnLevantar').textContent.replace(/\s+/g, ' ').trim());
+  log('sin hoja al elegir: ' + (d.querySelector('.sheet') === null));
+
+  // abrir la ficha
+  d.getElementById('btnLevantar').click();
+  await esperar(700);
+  log('ficha visible     : ' + !d.getElementById('v-ficha').classList.contains('hidden'));
+  log('sector readonly   : ' + d.getElementById('f-sector').readOnly + ' valor="' + d.getElementById('f-sector').value + '"');
+  log('mat readonly      : ' + d.getElementById('f-mat').readOnly + ' valor="' + d.getElementById('f-mat').value + '"');
+  log('inicio tipo       : ' + d.getElementById('f-inicio').type);
+  const ahoraInicio = d.querySelector('[data-ahora="inicio"]');
+  const ahoraFin = d.querySelector('[data-ahora="fin"]');
+  log('botones Ahora     : ' + (!!ahoraInicio) + ' / ' + (!!ahoraFin));
+
+  d.getElementById('f-inicio').value = '';
+  ahoraInicio.click();
+  await esperar(200);
+  log('inicio tras Ahora : "' + d.getElementById('f-inicio').value + '"');
+  d.getElementById('f-fin').value = '';
+  ahoraFin.click();
+  await esperar(200);
+  log('fin tras Ahora    : "' + d.getElementById('f-fin').value + '" dur="' + d.getElementById('f-dur').value + '"');
+
+  // fotografías en tres bloques con nombre para las adicionales
+  log('fotos bloques     : medición=' + !!d.getElementById('fotos-punto') +
+      ' placa=' + !!d.getElementById('fotos-placa') + ' extra=' + !!d.getElementById('fotos-extra'));
+  log('nombre de foto    : ' + !!d.getElementById('f-extra-nombre'));
+  const t1 = d.querySelector('.foto-bloque:nth-of-type(1) h3');
+  log('titulos fotos     : "' + (t1 ? t1.textContent : '') + '"');
+
+  log('errores           : ' + JSON.stringify((w.__errs || []).slice(0, 4)));
+  log('— FIN —');
+})();
+</script>
+</body></html>

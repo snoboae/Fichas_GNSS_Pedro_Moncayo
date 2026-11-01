@@ -1,5 +1,5 @@
-/* Lógica de la app: navegación, selección de puntos, ficha de campo, croquis,
-   generación del PDF, subida a Drive (Apps Script) y respaldo. */
+/* Lógica de la app: selección de puntos, ficha de campo, croquis, PDF,
+   subida a Drive (Apps Script) y respaldo. */
 const App = (() => {
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
@@ -26,7 +26,7 @@ const App = (() => {
     miPunto: null,
     watchGps: null,
     urls: [],
-    ajustes: { operadores: [], ultimoOperador: '', ultimoReceptor: '', autoSubir: true, borrarOrig: false, carpeta: '' }
+    ajustes: { operadores: [], ultimoOperador: '', ultimoReceptor: '', autoSubir: true, borrarOrig: false }
   };
 
   const P = (codigo) => PUNTOS.find((p) => p.c === codigo) || null;
@@ -81,44 +81,28 @@ const App = (() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
-  /* ---------------- lista de puntos ---------------- */
+  /* ---------------- puntos ---------------- */
   function puntosFiltrados(q) {
     const t = String(q || '').toLowerCase().trim();
     const base = PUNTOS.slice();
     if (!t) return base;
-    return base.filter((p) => [p.c, p.nombre, p.parroquia, p.sector].join(' ').toLowerCase().includes(t));
+    return base.filter((p) => [p.c, p.parroquia, p.sector].join(' ').toLowerCase().includes(t));
   }
 
   const ORDEN_PARROQUIA = ['Tabacundo', 'La Esperanza', 'Malchingui', 'Tocachi', 'Tupigachi'];
   const ordenParr = (p) => { const i = ORDEN_PARROQUIA.indexOf(p.parroquia); return i < 0 ? 99 : i; };
-  const puntosLista = (q) => puntosFiltrados(q).sort((a, b) => (ordenParr(a) - ordenParr(b)) || a.c.localeCompare(b.c));
 
   function renderCombo() {
-    const lista = puntosFiltrados($('comboQ').value);
+    const lista = puntosFiltrados($('comboQ').value)
+      .sort((a, b) => (ordenParr(a) - ordenParr(b)) || a.c.localeCompare(b.c));
     $('comboList').innerHTML = lista.map((p) => {
       const ok = !!guardada(p.c);
       return `<button type="button" class="combo-item${ok ? ' saved' : ''}${S.sel === p.c ? ' sel' : ''}" data-cod="${esc(p.c)}" role="option">
         <span class="ck">✓</span>
-        <span><b>${esc(p.c)}</b><span class="s">${esc(p.nombre)} · ${esc(p.parroquia)}</span></span>
+        <span><b>${esc(p.c)}</b><span class="s">${esc(p.parroquia)} · ${esc(p.mat)}</span></span>
         <span class="ord">${p.orden}°</span>
       </button>`;
     }).join('') || '<p class="hint" style="padding:14px">Sin resultados.</p>';
-  }
-
-  function renderLista() {
-    const lista = puntosLista($('q').value);
-    let html = '', parr = '';
-    lista.forEach((p) => {
-      if (p.parroquia !== parr) { parr = p.parroquia; html += `<div class="lp-grupo">${esc(parr)}</div>`; }
-      const f = guardada(p.c);
-      const pendCro = f && !f.croquis;
-      html += `<button class="lp${f ? ' saved' : ''}" data-cod="${esc(p.c)}">
-        <span class="ck">${f ? '✓' : '○'}</span>
-        <span><b>${esc(p.c)}</b><small>${esc(p.nombre)} · ${esc(p.mat)}</small></span>
-        <span class="tag">${f ? (pendCro ? 'Sin croquis' : 'Guardada') : 'Pendiente'}</span>
-      </button>`;
-    });
-    $('listaPuntos').innerHTML = html || '<p class="hint">Sin puntos que coincidan.</p>';
   }
 
   function renderAvance() {
@@ -129,12 +113,11 @@ const App = (() => {
   }
 
   function renderTodo() {
-    renderCombo(); renderLista(); renderAvance();
+    renderCombo(); renderAvance();
     if (S.sel) { pintarComboVal(); pintarPanelPunto(S.sel); }
   }
 
-  /* ---------------- selección de punto ---------------- */
-  function seleccionar(codigo, abrirHoja) {
+  function seleccionar(codigo) {
     S.sel = codigo;
     pintarComboVal();
     $('comboPanel').classList.add('hidden');
@@ -143,8 +126,7 @@ const App = (() => {
     $('btnLevantar').disabled = false;
     $('btnLevantar').querySelector('span:last-child').firstChild.textContent = guardada(codigo) ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
     pintarPanelPunto(codigo);
-    renderCombo(); renderLista();
-    if (abrirHoja) abrirSheet(codigo);
+    renderCombo();
   }
 
   function pintarComboVal() {
@@ -152,38 +134,29 @@ const App = (() => {
     const p = P(S.sel);
     const ok = guardada(S.sel);
     $('comboVal').innerHTML = (ok ? '<span class="ok">✓</span> ' : '') + esc(S.sel) +
-      ` <small>${esc(p ? p.nombre : '')}${ok ? ' · guardada' : ''}</small>`;
+      ` <small>${esc(p ? p.parroquia : '')}${ok ? ' · guardada' : ''}</small>`;
   }
 
   function pintarPanelPunto(codigo) {
     const p = P(codigo); if (!p) return;
     const f = guardada(codigo);
-    const { lat, lon } = Geo.puntoLatLon(p);
     $('panelPunto').classList.remove('hidden');
-    $('pp-nombre').textContent = `${p.c} — ${p.nombre}`;
+    $('pp-nombre').textContent = p.c;
     $('pp-sub').textContent = `${p.parroquia} · ${p.orden}° orden · ${p.mat}`;
     $('pp-datos').innerHTML = [
       ['ESTE (X)', p.e.toLocaleString('es-EC')],
       ['NORTE (Y)', p.n.toLocaleString('es-EC')],
       ['ZONA / DATUM', `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`],
-      ['MATERIALIZACIÓN', p.mat],
-      ['DISTANCIA', f ? `Ficha del ${PDF.fmtFecha(f.fecha)}` : 'Ficha pendiente'],
-      ['ESTADO', f ? (f.drive && f.drive.estado === 'subida' ? 'Guardada · en Drive' : 'Guardada en el teléfono') : 'Pendiente de levantar']
+      ['SECTOR / SITIO', p.sector],
+      ['ESTADO', f ? (f.drive && f.drive.estado === 'subida' ? 'Guardada · en Drive' : 'Guardada en el teléfono') : 'Pendiente de levantar'],
+      ['FICHA', f ? `Del ${PDF.fmtFecha(f.fecha)}` : '—']
     ].map(([k, v]) => `<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
     $('btnVerFicha').classList.toggle('hidden', !f);
-    $('puntoSelHint').textContent = f ? 'Ficha guardada: puedes verla, descargarla o subirla a Drive.' : '';
-    void lat; void lon;
+    $('btnBorrarFicha').classList.toggle('hidden', !f);
+    $('puntoSelHint').textContent = f
+      ? 'Ficha guardada: puedes verla, descargarla o borrarla.'
+      : 'Puedes ir al punto o levantar la ficha.';
   }
-
-  function abrirSheet(codigo) {
-    const p = P(codigo), f = guardada(codigo);
-    $('sheetTitle').textContent = `${p.c} — ${p.nombre}`;
-    $('sheetSub').textContent = `${p.parroquia} · ${p.sector} · ${p.mat}`;
-    $('shVer').classList.toggle('hidden', !f);
-    $('shLevantar').querySelector('span:last-child').firstChild.textContent = f ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
-    $('sheet').classList.remove('hidden');
-  }
-  const cerrarSheet = () => $('sheet').classList.add('hidden');
 
   /* ---------------- IR AL PUNTO ---------------- */
   function irAlPunto(codigo) {
@@ -214,14 +187,12 @@ const App = (() => {
       operador: S.ajustes.ultimoOperador || '', receptor: S.ajustes.ultimoReceptor || '',
       alturaAntena: '',
       metodo: METODO, mascara: MASCARA, intervalo: INTERVALO,
-      descripcion: '', accesibilidad: '', observaciones: '',
       croquis: null, croquisZ: null, croquisPendiente: false,
       creado: Date.now(), actualizado: Date.now()
     };
   }
 
   async function abrirFicha(codigo) {
-    cerrarSheet();
     const p = P(codigo); if (!p) return;
     const f = guardada(codigo);
     S.editor = f ? clone(f) : nuevaFicha(p);
@@ -230,6 +201,7 @@ const App = (() => {
     pintarForm();
     pintarFotosEditor();
     mostrar('ficha');
+    if (!$('f-extra-nombre').value) $('f-extra-nombre').value = '';
     if (!S.editor.croquis) {
       const guardado = await croquisCache(codigo);
       if (guardado) {
@@ -241,7 +213,7 @@ const App = (() => {
     }
   }
 
-  /* Compatibilidad con fichas guardadas por versiones anteriores (fecha + hora separadas). */
+  /* Compatibilidad con fichas guardadas por versiones anteriores. */
   function migrarFicha(f, p) {
     const { lat, lon } = Geo.puntoLatLon(p);
     if (f.lat == null || f.lon == null) { f.lat = lat; f.lon = lon; }
@@ -252,6 +224,8 @@ const App = (() => {
     if (!f.fin && f.horaFin) f.fin = `${(f.fecha || hoy()).slice(0, 10)}T${f.horaFin}`;
     if (!f.fecha) f.fecha = (f.inicio || '').slice(0, 10) || hoy();
     f.metodo = METODO; f.mascara = MASCARA; f.intervalo = INTERVALO;
+    // parroquia, sector y materialización son del diseño: siempre se toman de ahí
+    f.nombre = p.nombre; f.parroquia = p.parroquia; f.sector = p.sector; f.materializacion = p.mat;
     delete f.horaInicio; delete f.horaFin; delete f.alturaElipsoidal;
     delete f.sats; delete f.gdop; delete f.datum; delete f.epoca;
     return f;
@@ -260,15 +234,14 @@ const App = (() => {
   function pintarForm() {
     const f = S.editor;
     $('f-titulo').textContent = `Ficha ${f.codigo}`;
-    $('f-nombre').value = f.nombre || '';
     $('f-codigo').value = f.codigo || '';
     $('f-parroquia').value = f.parroquia || '';
     $('f-sector').value = f.sector || '';
+    $('f-mat').value = f.materializacion || '';
     $('f-este').value = Number(f.este).toLocaleString('es-EC');
     $('f-norte').value = Number(f.norte).toLocaleString('es-EC');
     $('f-orden').value = `${f.orden}° orden`;
     $('f-zona').value = `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`;
-    $('f-mat').innerHTML = MATERIALIZACIONES.map((m) => `<option${m === f.materializacion ? ' selected' : ''}>${esc(m)}</option>`).join('');
     const p = P(f.codigo);
     $('f-trabajos').textContent = p ? p.trabajos : '';
     $('f-receptor').innerHTML = '<option value="">—</option>' + RECEPTORES.map((r) => `<option${r === f.receptor ? ' selected' : ''}>${esc(r)}</option>`).join('');
@@ -276,9 +249,6 @@ const App = (() => {
     $('f-inicio').value = f.inicio || '';
     $('f-fin').value = f.fin || '';
     $('f-operador').value = f.operador || '';
-    $('f-desc').value = f.descripcion || '';
-    $('f-acceso').value = f.accesibilidad || '';
-    $('f-obs').value = f.observaciones || '';
     pintarCroquis();
     pintarDuracion();
     pintarNotasDiseno();
@@ -293,14 +263,13 @@ const App = (() => {
   }
 
   function pintarOperadores() {
-    $('lstOperadores').innerHTML = (S.ajustes.operadores || []).map((o) => `<option value="${esc(o)}">`).join('');
+    const lista = (S.ajustes.operadores || []).slice();
+    S.fichas.forEach((f) => { if (f.operador && !lista.includes(f.operador)) lista.push(f.operador); });
+    $('lstOperadores').innerHTML = lista.map((o) => `<option value="${esc(o)}">`).join('');
   }
 
   function leerForm() {
     const f = S.editor;
-    f.nombre = $('f-nombre').value.trim();
-    f.sector = $('f-sector').value.trim();
-    f.materializacion = $('f-mat').value;
     f.receptor = $('f-receptor').value;
     f.alturaAntena = numero($('f-altura').value);
     f.inicio = $('f-inicio').value;
@@ -308,9 +277,6 @@ const App = (() => {
     f.fecha = (f.inicio || hoy()).slice(0, 10);
     f.operador = $('f-operador').value.trim();
     f.metodo = METODO; f.mascara = MASCARA; f.intervalo = INTERVALO;
-    f.descripcion = $('f-desc').value.trim();
-    f.accesibilidad = $('f-acceso').value.trim();
-    f.observaciones = $('f-obs').value.trim();
     f.actualizado = Date.now();
     pintarDuracion();
   }
@@ -322,7 +288,7 @@ const App = (() => {
     return isFinite(n) ? n : null;
   };
 
-  /* "2026-10-31T09:15" -> minutos desde el día, para la duración */
+  /* "2026-10-31T09:15" -> minutos, para la duración */
   function duracionMin(f) {
     if (!f.inicio || !f.fin) return null;
     const a = new Date(f.inicio), b = new Date(f.fin);
@@ -337,6 +303,14 @@ const App = (() => {
   }
   function pintarDuracion() {
     $('f-dur').value = fmtDur(duracionMin(S.editor));
+  }
+
+  /* Botón "Ahora": registra la fecha y hora de este momento. */
+  function ponerAhora(cual) {
+    const valor = ahoraLocal();
+    $(cual === 'fin' ? 'f-fin' : 'f-inicio').value = valor;
+    leerForm();
+    toast(cual === 'fin' ? 'Hora de fin registrada.' : 'Hora de inicio registrada.', 'ok');
   }
 
   function pintarCroquis() {
@@ -395,10 +369,9 @@ const App = (() => {
       (sin ? ` · ${sin} sin imagen satelital` : '') + (err ? ` · ${err} con error` : '') + '.';
     $('croquisPrepMsg').textContent = msg + ' Ya se pueden usar sin internet.';
     toast(msg, err || sin ? 'err' : 'ok');
-    renderLista();
   }
 
-  /* Completa los croquis que quedaron pendientes en fichas guardadas (al volver internet). */
+  /* Completa los croquis que quedaron pendientes (al volver internet). */
   async function completarCroquisPendientes() {
     if (!navigator.onLine) return 0;
     const pend = Array.from(S.fichas.values()).filter((f) => !f.croquis);
@@ -442,7 +415,7 @@ const App = (() => {
     if (f.inicio && f.fin && duracionMin(f) != null && duracionMin(f) <= 0) faltan.push('fin posterior al inicio');
     if (!f.operador) faltan.push('operador');
     if (!f.croquis) faltan.push('croquis (se puede completar después)');
-    if (!S.fotosEditor.some((m) => m.tipo === 'punto')) faltan.push('fotografía del punto');
+    if (!S.fotosEditor.some((m) => m.tipo === 'punto')) faltan.push('fotografía de la medición');
     if (!S.fotosEditor.some((m) => m.tipo === 'placa')) faltan.push('fotografía de la placa');
     if (faltan.length && !confirm('Falta completar:\n· ' + faltan.join('\n· ') + '\n\n¿Guardar la ficha igual?')) return;
 
@@ -451,7 +424,7 @@ const App = (() => {
     const prev = guardada(f.codigo);
     f.drive = prev && prev.drive ? prev.drive : { estado: 'pend' };
     if (prev) {
-      const campos = ['receptor', 'alturaAntena', 'inicio', 'fin', 'materializacion', 'descripcion', 'accesibilidad', 'observaciones'];
+      const campos = ['receptor', 'alturaAntena', 'inicio', 'fin'];
       if (campos.some((k) => String(prev[k] || '') !== String(f[k] || ''))) f.drive.estado = 'pend';
       if (!prev.croquis && f.croquis) f.drive.estado = 'pend';
     }
@@ -473,8 +446,11 @@ const App = (() => {
   }
 
   /* ---------------- fotografías ---------------- */
+  const NOMBRE_TIPO = { punto: 'medicion', placa: 'placa', extra: 'extra' };
+
   async function agregarFotos(tipo, files) {
     if (!files || !files.length) return;
+    const etiqueta = tipo === 'extra' ? $('f-extra-nombre').value.trim() : '';
     busy(true, 'Procesando fotografías…');
     try {
       let orden = S.fotosEditor.filter((m) => m.tipo === tipo).length;
@@ -483,7 +459,8 @@ const App = (() => {
         orden += 1;
         await Fotos.add({
           id: uid(), fichaId: S.editor.codigo, tipo, blob: pr.blob, orig: pr.orig,
-          thumb: pr.thumb, w: pr.w, h: pr.h, orden, nombre: file.name || `${tipo}.jpg`
+          thumb: pr.thumb, w: pr.w, h: pr.h, orden, etiqueta,
+          nombre: file.name || `${tipo}.jpg`
         });
       }
       S.fotosEditor = await Fotos.byFicha(S.editor.codigo);
@@ -495,13 +472,20 @@ const App = (() => {
   }
 
   function pintarFotosEditor() {
-    ['punto', 'placa'].forEach((tipo) => {
+    ['punto', 'placa', 'extra'].forEach((tipo) => {
+      const cont = $('fotos-' + tipo);
+      if (!cont) return;
       const lista = S.fotosEditor.filter((m) => m.tipo === tipo);
-      $('fotos-' + tipo).innerHTML = lista.map((m, i) => `<figure class="phcard">
-        <button class="phfoto" data-ver="${m.id}" title="Ver"><img src="${m.thumb}" alt=""></button>
-        <button class="del" data-borrar="${m.id}" title="Borrar">×</button>
-        <span class="tag">${i === 0 ? 'En la ficha' : 'Solo Drive'} · ${m.w}×${m.h}</span>
-      </figure>`).join('');
+      cont.innerHTML = lista.map((m, i) => {
+        const pie = tipo === 'extra'
+          ? (m.etiqueta ? esc(m.etiqueta) : 'Sin nombre')
+          : (i === 0 ? 'En la ficha' : 'Solo Drive');
+        return `<figure class="phcard">
+          <button class="phfoto" data-ver="${m.id}" title="Ver"><img src="${m.thumb}" alt=""></button>
+          <button class="del" data-borrar="${m.id}" title="Borrar">×</button>
+          <span class="tag">${pie}</span>
+        </figure>`;
+      }).join('');
     });
   }
 
@@ -525,7 +509,7 @@ const App = (() => {
       const blob = await Fotos.getBlob(m.id);
       if (!blob) continue;
       const v = await Fotos.paraPDF(blob, 1200);
-      out.push({ tipo: m.tipo, orden: m.orden, dataUrl: v.dataUrl, w: v.w, h: v.h });
+      out.push({ tipo: m.tipo, orden: m.orden, etiqueta: m.etiqueta, dataUrl: v.dataUrl, w: v.w, h: v.h });
     }
     return out;
   }
@@ -552,12 +536,11 @@ const App = (() => {
 
   /* ---------------- detalle ---------------- */
   async function verDetalle(codigo) {
-    cerrarSheet();
     const f = guardada(codigo);
     if (!f) { abrirFicha(codigo); return; }
     S.sel = codigo;
     mostrar('detalle');
-    $('d-titulo').textContent = `${f.codigo} — ${f.nombre}`;
+    $('d-titulo').textContent = f.codigo;
     $('d-sub').textContent = `${f.parroquia} · ${f.orden}° orden · ${f.materializacion || ''}`;
     const d = duracionMin(f);
     $('d-datos').innerHTML = [
@@ -571,7 +554,7 @@ const App = (() => {
       ['RECEPTOR', f.receptor || '—'],
       ['ALTURA ANTENA', f.alturaAntena ? f.alturaAntena + ' m' : '—'],
       ['OPERADOR', f.operador || '—'],
-      ['MATERIALIZACIÓN', f.materializacion || '—'],
+      ['SECTOR / SITIO', f.sector || '—'],
       ['ACTUALIZADA', new Date(f.actualizado || f.creado || Date.now()).toLocaleString('es-EC')]
     ].map(([k, v]) => `<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
 
@@ -586,7 +569,9 @@ const App = (() => {
       const blob = await Fotos.getBlob(m.id);
       const url = blob ? URL.createObjectURL(blob) : m.thumb;
       if (blob) S.urls.push(url);
-      fotosHtml.push(`<figure><img src="${url}" alt=""><figcaption>${m.tipo === 'placa' ? 'Placa' : 'Punto'} ${m.orden || ''}</figcaption></figure>`);
+      const nom = m.tipo === 'extra' ? (m.etiqueta || 'Adicional')
+        : m.tipo === 'placa' ? 'Placa' : 'Medición';
+      fotosHtml.push(`<figure><img src="${url}" alt=""><figcaption>${esc(nom)} ${m.orden || ''}</figcaption></figure>`);
     }
     $('d-fotos').innerHTML = fotosHtml.join('') || '<p class="hint">Sin fotografías.</p>';
     $('d-fotosPanel').classList.toggle('hidden', !metas.length);
@@ -641,7 +626,7 @@ const App = (() => {
       const rec = await Fotos.getRec(m.id);
       if (!rec) continue;
       out.push({
-        tipo: m.tipo, orden: m.orden, nombre: m.nombre,
+        tipo: m.tipo, orden: m.orden, nombre: m.nombre, etiqueta: m.etiqueta,
         orig: rec.orig, blob: rec.blob, origTipo: m.origTipo, tipoArchivo: rec.blob ? rec.blob.type : ''
       });
     }
@@ -683,7 +668,6 @@ const App = (() => {
       .filter((f) => (soloErrores ? f.drive && f.drive.estado === 'error' : !f.drive || f.drive.estado !== 'subida'));
     if (!lista.length) { toast('No hay fichas pendientes de subir.', 'ok'); return; }
     if (!Drive.configurado()) { toast('Configura la URL y la clave del script primero.', 'err'); return; }
-    const sinCroquis = lista.filter((f) => !f.croquis).length;
     let ok = 0, err = 0, saltadas = 0;
     for (const f of lista) {
       if (!f.croquis) { saltadas++; continue; }
@@ -705,7 +689,7 @@ const App = (() => {
     busy(false);
     let msg = `Subida terminada: ${ok} correcta(s)`;
     if (err) msg += `, ${err} con error`;
-    if (saltadas || sinCroquis) msg += `, ${saltadas} sin croquis (se subirán después)`;
+    if (saltadas) msg += `, ${saltadas} sin croquis (se subirán después)`;
     toast(msg + '.', err ? 'err' : 'ok');
   }
 
@@ -722,7 +706,6 @@ const App = (() => {
         : 'Falta la URL y la clave del script de Drive.';
     $('driveUrl').value = Drive.urlActual() || '';
     $('driveClave').value = Drive.claveActual() || '';
-    $('carpetaNombre').textContent = S.ajustes.carpeta || CONFIG.carpetaProyecto;
 
     const total = PUNTOS.filter((p) => guardada(p.c)).length;
     const subidas = PUNTOS.filter((p) => { const f = guardada(p.c); return f && f.drive && f.drive.estado === 'subida'; }).length;
@@ -746,32 +729,28 @@ const App = (() => {
   /* ---------------- exportaciones ---------------- */
   const csvQ = (v) => { const s = v == null ? '' : String(v); return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 
-  function exportarCsv() {
-    const cols = ['codigo', 'nombre', 'parroquia', 'sector', 'orden', 'este', 'norte', 'materializacion',
+  async function exportarCsv() {
+    const metas = await DB.all('pmeta');
+    const por = {};
+    metas.forEach((m) => {
+      por[m.fichaId] = por[m.fichaId] || { punto: 0, placa: 0, extra: 0 };
+      por[m.fichaId][m.tipo] = (por[m.fichaId][m.tipo] || 0) + 1;
+    });
+    const cols = ['codigo', 'parroquia', 'sector', 'orden', 'este', 'norte', 'materializacion',
       'receptor', 'altura_antena', 'inicio', 'fin', 'duracion_min', 'metodo', 'mascara', 'intervalo',
-      'operador', 'fotos_punto', 'fotos_placa', 'croquis', 'drive'];
+      'operador', 'fotos_medicion', 'fotos_placa', 'fotos_extra', 'croquis', 'drive'];
     const filas = PUNTOS.map((p) => {
       const f = guardada(p.c) || {};
-      return [p.c, f.nombre || p.nombre, p.parroquia, f.sector || p.sector, p.orden, p.e, p.n,
+      const c = por[p.c] || { punto: 0, placa: 0, extra: 0 };
+      return [p.c, p.parroquia, f.sector || p.sector, p.orden, p.e, p.n,
         f.materializacion || p.mat, f.receptor || '', f.alturaAntena || '', f.inicio || '', f.fin || '',
         f.duracionMin || '', f.metodo || METODO, f.mascara || MASCARA, f.intervalo || INTERVALO,
-        f.operador || '', '', '', f.este ? (f.croquis ? 'sí' : 'pendiente') : 'no',
+        f.operador || '', c.punto, c.placa, c.extra,
+        f.croquis ? 'sí' : (f.codigo ? 'pendiente' : 'no'),
         (f.drive && f.drive.estado) || 'pendiente'];
     });
-    // cuenta de fotos por ficha
-    DB.all('pmeta').then((metas) => {
-      const por = {};
-      metas.forEach((m) => {
-        por[m.fichaId] = por[m.fichaId] || { punto: 0, placa: 0 };
-        por[m.fichaId][m.tipo] = (por[m.fichaId][m.tipo] || 0) + 1;
-      });
-      filas.forEach((r) => {
-        const c = por[r[0]] || { punto: 0, placa: 0 };
-        r[17] = c.punto; r[18] = c.placa;
-      });
-      const csv = '\ufeff' + [cols.join(';')].concat(filas.map((r) => r.map(csvQ).join(';'))).join('\r\n');
-      bajarBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `avance_red_geodesica_${hoy()}.csv`);
-    });
+    const csv = '\ufeff' + [cols.join(';')].concat(filas.map((r) => r.map(csvQ).join(';'))).join('\r\n');
+    bajarBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `avance_red_geodesica_${hoy()}.csv`);
   }
 
   function geojsonPuntos() {
@@ -782,11 +761,11 @@ const App = (() => {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [lon, lat] },
         properties: {
-          codigo: p.c, nombre: f.nombre || p.nombre, parroquia: p.parroquia, sector: f.sector || p.sector,
+          codigo: p.c, parroquia: p.parroquia, sector: f.sector || p.sector,
           orden: p.orden, este: p.e, norte: p.n, mat: f.materializacion || p.mat,
           receptor: f.receptor || '', altura: f.alturaAntena || '', inicio: f.inicio || '',
           fin: f.fin || '', dur: f.duracionMin || '', operador: f.operador || '',
-          ficha: f.este ? 'si' : 'no', croquis: f.croquis ? 'si' : 'pendiente',
+          ficha: f.codigo ? 'si' : 'no', croquis: f.croquis ? 'si' : 'pendiente',
           drive: (f.drive && f.drive.estado) || ''
         }
       };
@@ -809,15 +788,15 @@ const App = (() => {
     try {
       const fichas = codigo ? [guardada(codigo)] : Array.from(S.fichas.values());
       const entradas = [];
-      const indice = [['codigo', 'tipo', 'orden', 'archivo', 'ancho', 'alto', 'fecha']];
+      const indice = [['codigo', 'tipo', 'etiqueta', 'orden', 'archivo', 'ancho', 'alto', 'fecha']];
       for (const f of fichas) {
         if (!f) continue;
         for (const m of await Fotos.byFicha(f.codigo)) {
           const blob = await Fotos.getBlob(m.id);
           if (!blob) continue;
-          const nombre = `${f.codigo}/${f.codigo}_${m.tipo}_${m.orden}.jpg`;
+          const nombre = `${f.codigo}/${f.codigo}_${NOMBRE_TIPO[m.tipo] || m.tipo}_${m.orden}.jpg`;
           entradas.push({ name: nombre, blob });
-          indice.push([f.codigo, m.tipo, m.orden, nombre, m.w, m.h, new Date(m.tomada || Date.now()).toISOString()]);
+          indice.push([f.codigo, m.tipo, m.etiqueta || '', m.orden, nombre, m.w, m.h, new Date(m.tomada || Date.now()).toISOString()]);
         }
       }
       if (!entradas.length) { toast('No hay fotografías para exportar.', 'err'); return; }
@@ -861,8 +840,7 @@ const App = (() => {
         S.fichas.set(f.codigo, f);
         n++;
       }
-      if (j.ajustes) { S.ajustes = Object.assign(S.ajustes, j.ajustes); await guardarAjustes(); }
-      renderTodo(); renderDrive(); pintarAjustes();
+      renderTodo(); renderDrive();
       toast(`Respaldo importado: ${n} ficha(s).`, 'ok');
       $('backupInfo').textContent = `Se importaron ${n} ficha(s).`;
     } catch (e) {
@@ -875,23 +853,9 @@ const App = (() => {
     const a = await DB.kvGet('ajustes', null);
     if (a) S.ajustes = Object.assign(S.ajustes, a);
     if (!Array.isArray(S.ajustes.operadores)) S.ajustes.operadores = [];
-    if (!S.ajustes.carpeta) S.ajustes.carpeta = CONFIG.carpetaProyecto;
-    delete S.ajustes.datum; delete S.ajustes.epoca;
+    delete S.ajustes.carpeta; delete S.ajustes.datum; delete S.ajustes.epoca;
   }
   async function guardarAjustes() { await DB.kvSet('ajustes', S.ajustes); }
-
-  function pintarAjustes() {
-    $('a-carpeta').value = S.ajustes.carpeta || CONFIG.carpetaProyecto;
-    $('a-operadores').value = (S.ajustes.operadores || []).join('\n');
-  }
-
-  async function guardarAjustesForm() {
-    S.ajustes.carpeta = $('a-carpeta').value.trim() || CONFIG.carpetaProyecto;
-    S.ajustes.operadores = $('a-operadores').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    await guardarAjustes();
-    renderDrive();
-    toast('Datos del proyecto guardados.', 'ok');
-  }
 
   /* ---------------- actualizaciones de la app ---------------- */
   let swReg = null;
@@ -899,8 +863,6 @@ const App = (() => {
   let buildSW = '';
   let actualizacionPendiente = false;
 
-  /* Muestra la barra "hay una versión nueva". Nunca interrumpe una ficha a medio
-     llenar: si el formulario está abierto, queda pendiente y aparece al salir. */
   function mostrarBarra(version) {
     const barra = $('updateBar');
     if (!barra || !teniaControl) return;
@@ -926,7 +888,6 @@ const App = (() => {
     if (el) el.textContent = `Versión ${CONFIG.version}${buildSW ? ' · build ' + buildSW : ''} · ${PROYECTO.nombre}`;
   }
 
-  /* Busca una versión nueva en el momento (botón de la pestaña Respaldo). */
   async function buscarActualizacion() {
     if (!swReg) { toast('Este navegador no permite actualizar desde la app. Cierra y vuelve a abrirla.', 'err'); return; }
     busy(true, 'Buscando actualizaciones…');
@@ -972,8 +933,6 @@ const App = (() => {
       try { navigator.serviceWorker.controller.postMessage({ tipo: 'version' }); } catch (e) { /* nada */ }
     }
 
-    /* Buscar actualizaciones: al volver a la app, al recuperar internet y cada 15 min.
-       (En el teléfono la app puede quedar abierta días sin recargar.) */
     let ultima = 0;
     const revisar = () => {
       if (document.visibilityState !== 'visible') return;
@@ -1011,13 +970,12 @@ const App = (() => {
     for (const m of await DB.all('pmeta')) if (!validos.has(m.fichaId)) await Fotos.remove(m.id);
 
     await Drive.init().catch(() => {});
-    renderTodo(); renderDrive(); pintarAjustes();
+    renderTodo(); renderDrive();
     netState();
     estadoApp();
     cablear();
     document.body.dataset.listo = '1';
     console.log('Inspección GNSS lista · ' + PUNTOS.length + ' puntos · ' + fichas.length + ' fichas guardadas');
-    // croquis que quedaron pendientes por falta de internet
     setTimeout(() => { completarCroquisPendientes(); }, 2000);
   }
 
@@ -1053,7 +1011,7 @@ const App = (() => {
     document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
       const t = b.dataset.tab;
       if (t === 'drive') renderDrive();
-      if (t === 'respaldo') { estadoApp(); pintarAjustes(); }
+      if (t === 'respaldo') estadoApp();
       mostrar(t);
     }));
 
@@ -1068,7 +1026,7 @@ const App = (() => {
     $('comboQ').addEventListener('input', renderCombo);
     $('comboList').addEventListener('click', (e) => {
       const b = e.target.closest('[data-cod]');
-      if (b) seleccionar(b.dataset.cod, true);
+      if (b) seleccionar(b.dataset.cod);
     });
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#combo')) $('comboPanel').classList.add('hidden');
@@ -1077,36 +1035,28 @@ const App = (() => {
     $('btnIr').addEventListener('click', () => S.sel && irAlPunto(S.sel));
     $('btnLevantar').addEventListener('click', () => S.sel && abrirFicha(S.sel));
     $('btnVerFicha').addEventListener('click', () => S.sel && verDetalle(S.sel));
-    $('btnMapaPunto').addEventListener('click', () => S.sel && verDetalle(S.sel));
-
-    document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', cerrarSheet));
-    $('shIr').addEventListener('click', () => { const c = S.sel; cerrarSheet(); if (c) irAlPunto(c); });
-    $('shLevantar').addEventListener('click', () => { const c = S.sel; cerrarSheet(); if (c) abrirFicha(c); });
-    $('shVer').addEventListener('click', () => { const c = S.sel; cerrarSheet(); if (c) verDetalle(c); });
-
-    $('listaPuntos').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-cod]');
-      if (b) seleccionar(b.dataset.cod, true);
-    });
-    $('q').addEventListener('input', renderLista);
+    $('btnBorrarFicha').addEventListener('click', () => S.sel && borrarFicha(S.sel));
 
     $('btnFichaBack').addEventListener('click', async () => {
       await limpiarBorrador();
       mostrar('puntos'); renderTodo();
     });
     $('btnGuardar').addEventListener('click', () => guardarFicha());
-    $('f-inicio').addEventListener('change', () => { leerForm(); pintarDuracion(); });
-    $('f-fin').addEventListener('change', () => { leerForm(); pintarDuracion(); });
+    $('f-inicio').addEventListener('change', () => { leerForm(); });
+    $('f-fin').addEventListener('change', () => { leerForm(); });
+    document.querySelectorAll('[data-ahora]').forEach((b) => b.addEventListener('click', () => ponerAhora(b.dataset.ahora)));
     $('btnCroquis').addEventListener('click', () => generarCroquis(false));
     $('btnVerCroquis').addEventListener('click', () => S.editor && S.editor.croquis && verImagen(S.editor.croquis));
 
     document.querySelectorAll('[data-foto]').forEach((b) => b.addEventListener('click', () => {
       const tipo = b.dataset.foto, src = b.dataset.src;
-      const input = $(src === 'cam' ? 'cam' + (tipo === 'punto' ? 'Punto' : 'Placa') : 'gal' + (tipo === 'punto' ? 'Punto' : 'Placa'));
+      const suf = tipo === 'punto' ? 'Punto' : tipo === 'placa' ? 'Placa' : 'Extra';
+      const input = $(src === 'cam' ? 'cam' + suf : 'gal' + suf);
       input.value = '';
       input.click();
     }));
-    [['camPunto', 'punto'], ['galPunto', 'punto'], ['camPlaca', 'placa'], ['galPlaca', 'placa']].forEach(([id, tipo]) => {
+    [['camPunto', 'punto'], ['galPunto', 'punto'], ['camPlaca', 'placa'], ['galPlaca', 'placa'],
+     ['camExtra', 'extra'], ['galExtra', 'extra']].forEach(([id, tipo]) => {
       $(id).addEventListener('change', (e) => agregarFotos(tipo, Array.from(e.target.files || [])));
     });
     document.addEventListener('click', async (e) => {
@@ -1151,20 +1101,23 @@ const App = (() => {
         $('driveCarpetaMsg').textContent = e.message;
       } finally { busy(false); }
     });
-    $('btnAbrirPing').addEventListener('click', () => {
-      const u = $('driveUrl').value.trim() || Drive.urlActual();
-      const c = $('driveClave').value.trim();
-      if (!u) { toast('Falta la URL del script.', 'err'); return; }
-      if (!c) { toast('Escribe la clave para hacer la prueba.', 'err'); return; }
-      const q = u + (u.includes('?') ? '&' : '?') + 'ping=1&clave=' + encodeURIComponent(c);
-      window.open(q, '_blank', 'noopener');
-      toast('Si ves un texto con "ok": true, el script está público. Si ves "Acceso denegado", falta cambiar el acceso de la implementación.');
-    });
+
+    /* Abrir la carpeta: usa el enlace guardado; si no hay, consulta el script y la abre. */
     $('btnAbrirCarpeta').addEventListener('click', async () => {
-      const u = await DB.kvGet('drive.raizUrl', '');
-      if (!u) { toast('Primero pulsa "Guardar y probar".', 'err'); return; }
-      window.open(u, '_blank', 'noopener');
+      let url = await DB.kvGet('drive.raizUrl', '');
+      if (!url && Drive.configurado()) {
+        busy(true, 'Consultando la carpeta en Drive…');
+        try {
+          const r = await Drive.probar();
+          url = r.raizUrl || '';
+          if (url) await DB.kvSet('drive.raizUrl', url);
+        } catch (e) { toast(e.message, 'err'); }
+        finally { busy(false); }
+      }
+      if (!url) { toast('Primero pulsa "Guardar y probar" para conectar con el script.', 'err'); return; }
+      window.open(url, '_blank', 'noopener');
     });
+
     $('btnSubirTodo').addEventListener('click', () => subirPendientes(false));
     $('btnReintentar').addEventListener('click', () => subirPendientes(true));
     $('autoSubir').addEventListener('change', async (e) => { S.ajustes.autoSubir = e.target.checked; await guardarAjustes(); });
@@ -1174,14 +1127,18 @@ const App = (() => {
     $('fileRestore').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) importarRespaldo(f); e.target.value = ''; });
     $('btnZipAll').addEventListener('click', () => exportarZip(null));
     $('btnCsv').addEventListener('click', exportarCsv);
-    $('btnBuscar').addEventListener('click', buscarActualizacion);
     $('btnGeo').addEventListener('click', () => exportarGeo(null));
+    $('btnBuscar').addEventListener('click', buscarActualizacion);
     $('btnPrepCroquis').addEventListener('click', prepararCroquis);
-    $('btnGuardarAjustes').addEventListener('click', guardarAjustesForm);
     $('btnBorrarTodo').addEventListener('click', async () => {
       if (!confirm('Se borrarán TODAS las fichas, fotografías y croquis de este teléfono. ¿Continuar?')) return;
       await DB.clear('fichas'); await DB.clear('photos'); await DB.clear('pmeta'); await DB.clear('croquis');
-      S.fichas.clear(); renderTodo(); renderDrive(); estadoApp();
+      S.fichas.clear(); S.sel = null;
+      $('panelPunto').classList.add('hidden');
+      $('btnIr').disabled = true; $('btnLevantar').disabled = true;
+      $('btnLevantar').querySelector('span:last-child').firstChild.textContent = 'LEVANTAR FICHA';
+      $('comboVal').textContent = 'Elegir un punto…';
+      renderTodo(); renderDrive(); estadoApp();
       toast('Datos borrados.', 'ok');
     });
 
@@ -1203,12 +1160,14 @@ const App = (() => {
   }
 
   async function borrarFicha(codigo) {
-    if (!confirm(`¿Eliminar la ficha de ${codigo} y sus fotografías?`)) return;
+    if (!confirm(`¿Borrar la ficha de ${codigo} y sus fotografías? El punto volverá a figurar como pendiente.`)) return;
     await Fotos.removeDeFicha(codigo);
     await DB.del('fichas', codigo);
     S.fichas.delete(codigo);
-    mostrar('puntos'); renderTodo(); renderDrive();
-    toast('Ficha eliminada.');
+    if (S.editor && S.editor.codigo === codigo) S.editor = null;
+    mostrar('puntos');
+    renderTodo(); renderDrive();
+    toast('Ficha borrada: el punto quedó libre.', 'ok');
   }
 
   return { init, renderTodo, verDetalle, abrirFicha, completarCroquisPendientes };

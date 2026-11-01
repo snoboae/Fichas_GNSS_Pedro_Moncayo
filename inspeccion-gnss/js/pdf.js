@@ -173,15 +173,14 @@ const PDF = (() => {
   function identificacion(doc, f, y) {
     seccion(doc, '1', 'Identificación del punto', y);
     const t = y + 6.6, h = 7.2, cw = CW / 6;
-    celda(doc, M, t, cw * 2, h, 'NOMBRE DEL PUNTO', f.nombre, { bold: true });
-    celda(doc, M + cw * 2, t, cw, h, 'CÓDIGO / NOMINATIVO', f.codigo, { bold: true });
-    celda(doc, M + cw * 3, t, cw, h, 'ORDEN', ORD[f.orden] || '—');
+    celda(doc, M, t, cw * 2, h, 'CÓDIGO / NOMINATIVO', f.codigo, { bold: true, size: 10 });
+    celda(doc, M + cw * 2, t, cw, h, 'ORDEN', ORD[f.orden] || '—');
+    celda(doc, M + cw * 3, t, cw, h, 'PARROQUIA', f.parroquia, { bold: true });
     celda(doc, M + cw * 4, t, cw * 2, h, 'FECHA', fmtFecha(f.fecha));
     const t2 = t + h;
     celda(doc, M, t2, cw, h, 'PROVINCIA', PROYECTO.provincia);
     celda(doc, M + cw, t2, cw, h, 'CANTÓN', PROYECTO.canton);
-    celda(doc, M + cw * 2, t2, cw, h, 'PARROQUIA', f.parroquia, { bold: true });
-    celda(doc, M + cw * 3, t2, cw * 3, h, 'SECTOR / SITIO', f.sector);
+    celda(doc, M + cw * 2, t2, cw * 4, h, 'SECTOR / SITIO', f.sector);
     return t2 + h;
   }
 
@@ -240,56 +239,38 @@ const PDF = (() => {
     imagen(doc, M, yImg, wCro, hImg, f.croquis, Croquis.W, Croquis.H, '',
       'Croquis pendiente.\nSe completa solo cuando haya internet.');
 
-    const conPunto = (fotos || []).find((p) => p.tipo === 'punto');
-    const conPlaca = (fotos || []).find((p) => p.tipo === 'placa');
-    const nPunto = (fotos || []).filter((p) => p.tipo === 'punto').length;
-    const nPlaca = (fotos || []).filter((p) => p.tipo === 'placa').length;
+    const lista = fotos || [];
+    const conPunto = lista.find((p) => p.tipo === 'punto');
+    const conPlaca = lista.find((p) => p.tipo === 'placa');
+    const nExtra = lista.filter((p) => p.tipo === 'extra').length;
 
     seccion(doc, '4', 'Registro fotográfico', ySec, xR, wR);
     const gap = 4, wF = (wR - gap) / 2;
-    const hF = Math.max(28, Math.min(wF / 1.5, hImg - 6.1 - 3.4 - 5.6 - 22));
-    imagen(doc, xR, yImg, wF, hF, conPunto && conPunto.dataUrl, conPunto && conPunto.w, conPunto && conPunto.h, 'Fotografía del punto');
+    const hF = Math.min(wF / 1.5, hImg - 12);
+    imagen(doc, xR, yImg, wF, hF, conPunto && conPunto.dataUrl, conPunto && conPunto.w, conPunto && conPunto.h, 'Fotografía de la medición');
     imagen(doc, xR + wF + gap, yImg, wF, hF, conPlaca && conPlaca.dataUrl, conPlaca && conPlaca.w, conPlaca && conPlaca.h, 'Fotografía de la placa');
-    if (nPunto > 1 || nPlaca > 1) {
-      txt(doc, `Se enviaron ${nPunto} foto(s) del punto y ${nPlaca} de la placa a la carpeta del punto en Google Drive.`,
-        xR, yImg + hF + 7.4, { size: 5.6, color: GRAY });
-    }
+
+    // nota al pie de las fotografías (ocupa el espacio libre de la columna)
+    const yNota = yImg + hF + 6.4;
+    const nota = 'Registro de campo de la observación GNSS. Las coordenadas X/Y corresponden al diseño de la red ' +
+      `geodésica cantonal (WGS84, UTM ${PROYECTO.zona} ${PROYECTO.hemisferio}) y no sustituyen la monografía ` +
+      'definitiva del punto.' + (nExtra ? ` Se archivaron ${nExtra} foto(s) adicional(es) en Google Drive.` : '');
+    const cabe = Math.max(1, Math.floor((BOTTOM - yNota) / 2.45));
+    const ln = recortar(lineas(doc, nota, wR - 2, 6.1, 'italic'), cabe);
+    txt(doc, ln, xR, yNota + 2.4, { size: 6.1, color: GRAY, italic: true, lh: 1.02 });
     log('fotos', yImg + hF);
 
-    // ---------- 5. observaciones (derecha, bajo las fotos) ----------
-    const yObs = yImg + hF + (nPunto > 1 || nPlaca > 1 ? 9.6 : 6.2);
-    seccion(doc, '5', 'Observaciones y accesibilidad', yObs, xR, wR);
-    const bx = xR, by = yObs + 6.2, bw = wR, alto = Math.max(18, BOTTOM - by);
-    doc.setDrawColor(...LINE); doc.setLineWidth(0.18); doc.rect(bx, by, bw, alto);
-
-    let ty = by + 4.2;
-    const bloques = [];
-    if (f.descripcion) bloques.push(['Descripción', f.descripcion]);
-    if (f.accesibilidad) bloques.push(['Accesibilidad', f.accesibilidad]);
-    if (f.observaciones) bloques.push(['Observaciones', f.observaciones]);
-    if (!bloques.length) bloques.push(['Observaciones', 'Sin novedades registradas en campo.']);
-    const limite = by + alto - 2.8;
-    for (const [lab, val] of bloques) {
-      if (ty > limite - 2.6) break;
-      ty = parrafoEtiqueta(doc, bx + 2, ty, bw - 4.4, limite, lab, val);
-    }
-    log('obs', by + alto);
-
-    // ---------- firma y nota ----------
-    const yF = 186.6, hFirma = 12.8, wFirma = 92;
+    // ---------- firma ----------
+    const yF = 186.6, hFirma = 12.8, wFirma = 128;
     doc.setDrawColor(...LINE); doc.setLineWidth(0.18); doc.rect(M, yF, wFirma, hFirma);
     txt(doc, 'ELABORADO POR — OPERADOR DE CAMPO', M + 2, yF + 3.3, { size: 5.3, bold: true, color: GRAY });
     txt(doc, f.operador || '—', M + 2, yF + 7, { size: 7.3, bold: true });
     doc.setDrawColor(...GRAY); doc.setLineWidth(0.2);
     doc.line(M + 4, yF + hFirma - 3, M + wFirma - 4, yF + hFirma - 3);
 
-    const xN = M + wFirma + 5, wN = PW - M - xN;
-    const nota = 'Registro de campo de la observación GNSS. Las coordenadas X/Y corresponden al diseño de la red ' +
-      `geodésica cantonal (WGS84, UTM ${PROYECTO.zona} ${PROYECTO.hemisferio}) y no sustituyen la monografía ` +
-      'definitiva del punto. Las fotografías adicionales y los datos se archivan en Google Drive.';
-    const ln = recortar(lineas(doc, nota, wN - 2, 6.1, 'italic'), 5);
-    txt(doc, ln, xN + 1, yF + 4, { size: 6.1, color: GRAY, italic: true, lh: 1.02 });
-
+    const xNota2 = M + wFirma + 6;
+    txt(doc, 'Fecha de elaboración: ' + fmtFecha(f.fecha), xNota2, yF + 5, { size: 6.1, color: GRAY });
+    txt(doc, 'Documento de campo del proyecto · no es la monografía definitiva del punto.', xNota2, yF + 9, { size: 6.1, color: GRAY, italic: true });
     // ---------- pie ----------
     doc.setDrawColor(...LINE); doc.setLineWidth(0.25);
     doc.line(M, PH - 8.2, PW - M, PH - 8.2);
