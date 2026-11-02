@@ -97,12 +97,13 @@ const Drive = (() => {
     }
   }
 
-  async function probar(u, c) {
+  async function probar(u, c, raiz) {
     const destino = validarUrl(u || url);
     const llave = String(c == null ? clave : c);
     if (!llave) throw new ErrorDrive('Falta la clave del script (la misma que pusiste en Code.gs).', 'clave');
     const q = destino + (destino.includes('?') ? '&' : '?') +
-      'ping=1&clave=' + encodeURIComponent(llave);
+      'ping=1&clave=' + encodeURIComponent(llave) +
+      (raiz ? '&raiz=' + encodeURIComponent(raiz) : '');
     let r;
     try {
       r = await fetch(q, { cache: 'no-store', redirect: 'follow' });

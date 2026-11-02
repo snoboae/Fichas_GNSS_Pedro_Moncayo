@@ -52,9 +52,9 @@ function doGet(e) {
   if (!p.ping) return json({ ok: true, version: '1.0', mensaje: 'Puente de subida activo' });
   if (p.clave !== CLAVE) return json({ ok: false, error: 'clave' });
   try {
-    var raiz = carpetaRaiz();
+    var raiz = carpetaRaiz(p.raiz);       // <-- la carpeta del levantamiento que pregunta
     return json({
-      ok: true, version: '1.0', cuenta: cuenta(),
+      ok: true, version: '1.0', cuenta: cuenta(), proyecto: String(p.raiz || ''),
       raiz: raiz.getName(), raizUrl: raiz.getUrl()
     });
   } catch (err) {

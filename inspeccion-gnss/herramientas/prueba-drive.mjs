@@ -123,6 +123,13 @@ globalThis.fetch = async () => respuesta({ json: { ok: true, cuenta: 'x@y.com', 
 const ping = await Drive.probar(URL_GOOGLE, 'secreta');
 check(ping.ok && ping.raiz === 'Carpeta', 'una respuesta correcta devuelve la carpeta y la cuenta');
 
+/* la carpeta que se consulta debe ser la del levantamiento (no siempre Pedro Moncayo) */
+let urlPedida = '';
+globalThis.fetch = async (u) => { urlPedida = String(u); return respuesta({ json: { ok: true, cuenta: 'x@y.com', raiz: 'Pruebas GNSS - Rumiñahui', raizUrl: 'https://drive.google.com/r' } }); };
+const pingRumi = await Drive.probar(URL_GOOGLE, 'secreta', 'Pruebas GNSS - Rumiñahui');
+check(/raiz=Pruebas%20GNSS%20-%20Rumi/.test(urlPedida), 'la conexión pide la carpeta del levantamiento', urlPedida);
+check(pingRumi.raiz === 'Pruebas GNSS - Rumiñahui', 'la respuesta trae la carpeta de Rumiñahui', pingRumi.raiz);
+
 globalThis.fetch = fetchReal;
 
 try { Drive.validarUrl('https://ejemplo.com/x'); check(false, 'URL inválida debe fallar'); }

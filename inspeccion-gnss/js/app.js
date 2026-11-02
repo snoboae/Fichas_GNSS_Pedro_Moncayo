@@ -97,6 +97,9 @@ const App = (() => {
     return f && (f.proyecto || 'pedro') === S.proyecto ? f : null;
   };
 
+  /* el enlace a la carpeta de Drive es distinto para cada levantamiento */
+  const claveRaizUrl = () => 'drive.raizUrl.' + (S.proyecto || 'pedro');
+
   /* ---------------- levantamiento activo ---------------- */
   function elegirProyecto(id) {
     if (typeof PROYECTOS === 'undefined' || !PROYECTOS[id]) return;
@@ -1305,14 +1308,15 @@ const App = (() => {
       busy(true, 'Probando el script…');
       try {
         Drive.validarUrl(u);
-        const r = await Drive.probar(u, c);
+        const r = await Drive.probar(u, c, (PR() ? PR().raizDrive : ''));
         await Drive.guardarConfig(u, c);
         renderDrive();
         const quien = r.cuenta ? ` (${r.cuenta})` : '';
-        toast('Conectado con Drive' + quien + '. Carpeta: ' + (r.raiz || CONFIG.carpetaProyecto), 'ok');
-        $('driveCarpetaMsg').innerHTML = 'Listo. La carpeta es <b>' + esc(r.raiz || CONFIG.carpetaProyecto) + '</b>' +
+        const raizTxt = r.raiz || (PR() ? PR().raizDrive : CONFIG.carpetaProyecto);
+    toast('Conectado con Drive' + quien + '. Carpeta: ' + raizTxt, 'ok');
+        $('driveCarpetaMsg').innerHTML = 'Listo. La carpeta es <b>' + esc(raizTxt) + '</b>' +
           (r.raizUrl ? ` — <a href="${esc(r.raizUrl)}" target="_blank" rel="noopener">abrir en Drive</a>` : '');
-        if (r.raizUrl) await DB.kvSet('drive.raizUrl', r.raizUrl);
+        if (r.raizUrl) await DB.kvSet(claveRaizUrl(), r.raizUrl);
       } catch (e) {
         toast(e.message, 'err');
         $('driveCarpetaMsg').textContent = e.message;
@@ -1325,13 +1329,13 @@ const App = (() => {
     $('btnAbrirCarpeta').addEventListener('click', async () => {
       const ventana = window.open('', '_blank');
       let url = '';
-      try { url = await DB.kvGet('drive.raizUrl', ''); } catch (e) { url = ''; }
+      try { url = await DB.kvGet(claveRaizUrl(), ''); } catch (e) { url = ''; }
       if (!url && Drive.configurado()) {
         busy(true, 'Consultando la carpeta en Drive…');
         try {
-          const r = await Drive.probar();
+          const r = await Drive.probar(undefined, undefined, (PR() ? PR().raizDrive : ''));
           url = r.raizUrl || '';
-          if (url) await DB.kvSet('drive.raizUrl', url);
+          if (url) await DB.kvSet(claveRaizUrl(), url);
         } catch (e) {
           if (ventana) ventana.close();
           toast(e.message, 'err');
