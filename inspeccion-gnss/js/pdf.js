@@ -254,7 +254,10 @@ const PDF = (() => {
 
     // ---------- 3. croquis (izquierda) + 4. fotografías (derecha) ----------
     const ySec = y, yImg = ySec + 6.2;
-    const hImg = BOTTOM - yImg;
+    const obsPdf = String(f.observaciones || '').trim();
+    const altoObs = obsPdf ? 19 : 0;         // franja reservada para las observaciones
+    const yFinImgs = BOTTOM - altoObs;
+    const hImg = yFinImgs - yImg;
     const wCro = Math.min(134, hImg * (Croquis.W / Croquis.H));
     const xR = M + wCro + 5, wR = CW - wCro - 5;
 
@@ -277,10 +280,22 @@ const PDF = (() => {
     const nota = 'Registro de campo de la observación GNSS. Las coordenadas X/Y corresponden al diseño de la red ' +
       `geodésica cantonal (WGS84, UTM ${PROY().zona} ${PROY().hemisferio}) y no sustituyen la monografía ` +
       'definitiva del punto.' + (nExtra ? ` Se archivaron ${nExtra} foto(s) adicional(es) en Google Drive.` : '');
-    const cabe = Math.max(1, Math.floor((BOTTOM - yNota) / 2.45));
+    const cabe = Math.max(1, Math.floor((yFinImgs - yNota) / 2.45));
     const ln = recortar(lineas(doc, nota, wR - 2, 6.1, 'italic'), cabe);
     txt(doc, ln, xR, yNota + 2.4, { size: 6.1, color: GRAY, italic: true, lh: 1.02 });
     log('fotos', yImg + hF);
+
+    // ---------- 5. observaciones (opcional) ----------
+    if (obsPdf) {
+      const y0 = yFinImgs + 2.2, hObs = BOTTOM - y0;
+      seccion(doc, '5', 'Observaciones', y0, M, CW);
+      doc.setFillColor(252, 253, 255); doc.rect(M, y0 + 5.2, CW, hObs - 5.2, 'F');
+      doc.setDrawColor(...LINE); doc.setLineWidth(0.18); doc.rect(M, y0 + 5.2, CW, hObs - 5.2);
+      const cabeObs = Math.max(1, Math.floor((hObs - 7.4) / 2.5));
+      const lns = recortar(lineas(doc, obsPdf, CW - 4, 6.3), cabeObs);
+      txt(doc, lns, M + 2, y0 + 8.1, { size: 6.3, lh: 0.98 });
+      log('observaciones', y0 + hObs);
+    }
 
     // ---------- firma ----------
     const yF = 186.6, hFirma = 12.8, wFirma = 128;

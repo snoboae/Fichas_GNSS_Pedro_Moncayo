@@ -98,12 +98,8 @@ addEventListener('unhandledrejection', (e) => {
   </div>
 
   <div class="panel">
-    <div class="bar wrap">
-      <h2 class="grow">Avance en este teléfono</h2>
-      <span class="pill" id="avancePill">0 / 22</span>
-    </div>
-    <div class="progress"><div id="progressBar"></div></div>
-    <p class="hint">Cada teléfono cuenta solo las fichas que se guardaron en él.</p>
+    <h2>Exportar</h2>
+    <p class="hint">El avance completo del levantamiento sale en el CSV; el GeoJSON sirve para revisar los puntos en ArcGIS.</p>
     <div class="row wrap">
       <button class="btn small" id="btnCsv">Exportar avance (CSV)</button>
       <button class="btn small" id="btnGeo">Exportar puntos (GeoJSON)</button>
@@ -210,6 +206,12 @@ addEventListener('unhandledrejection', (e) => {
     </div>
   </div>
 
+  <div class="panel">
+    <h2>Observaciones <span class="opt">opcional</span></h2>
+    <p class="hint">Notas de campo que quieras dejar por escrito (acceso, novedades, estado del punto, coordinación con la comunidad). Salen en el PDF.</p>
+    <textarea id="f-obs" rows="3" maxlength="600" placeholder="Escribe aquí si hace falta…"></textarea>
+  </div>
+
   <div class="panel" id="panelDiseno">
     <h2>Diseño de referencia</h2>
     <p class="hint">Lo que el informe de inspección in situ previó para este sitio (no se guarda en la ficha).</p>
@@ -238,6 +240,10 @@ addEventListener('unhandledrejection', (e) => {
   <div class="panel" id="d-croquisPanel">
     <h2>Croquis de ubicación</h2>
     <div class="preview"><img id="d-croquis" alt="Croquis"></div>
+  </div>
+  <div class="panel hidden" id="d-obsPanel">
+    <h2>Observaciones</h2>
+    <p class="hint" id="d-obs"></p>
   </div>
   <div class="panel" id="d-fotosPanel">
     <h2>Fotografías</h2>

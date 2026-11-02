@@ -43,12 +43,13 @@ function leerFicha(codigo) {
 
   const items = [...d.querySelectorAll('.combo-item')];
   log('total de sesiones: ' + items.length + ' (' + items.filter((x) => x.querySelector('.tipo.ida')).length + ' IDA / ' + items.filter((x) => x.querySelector('.tipo.vuelta')).length + ' VUELTA)');
-  log('numeración      : ' + items.slice(0, 3).map((x) => x.querySelector('.num').textContent + ':' + x.dataset.id).join(' | '));
+  log('primeras 3      : ' + items.slice(0, 3).map((x) => x.dataset.id).join(' | '));
+  log('bases primero   : ' + (items.length && /-BASE-/.test(items[0].dataset.id) ? 'sí' : 'NO'));
   log('sin ruta        : ' + [...d.querySelectorAll('.combo-sep')].map((x) => x.textContent).join(' / '));
   const base = items.filter((x) => /BASE/.test(x.textContent));
   log('jornadas de base: ' + base.length + ' · primera=' + (base[0] ? base[0].dataset.id : '-') + ' · etiqueta=' + (base[0] ? base[0].querySelector('.tipo').textContent : '-'));
   log('bases sin ruta  : ' + items.filter((x) => /BASE/.test(x.dataset.id)).map((x) => x.dataset.id).filter((id) => !/-BASE-\\d+$/.test(id)).join(',') || 'ninguna');
-  log('avance inicial  : ' + d.getElementById('avancePill').textContent);
+  log('sección avance  : ' + (d.getElementById('avancePill') ? 'SIGUE' : 'retirada'));
   log('entradas base   : ' + items.filter((x) => /BASE/.test(x.dataset.id)).map((x) => x.dataset.id).join(', '));
   const itemBaseRg = items.find((x) => /RG-50-01-BASE-/.test(x.dataset.id));
   const idBase = itemBaseRg ? itemBaseRg.dataset.id : 'RG-50-01-BASE-x';
@@ -91,6 +92,9 @@ function leerFicha(codigo) {
   log('croquis en ficha : src=' + (previa.getAttribute('src') || '') + ' cargada=' + (previa.naturalWidth > 0) + ' (' + previa.naturalWidth + 'x' + previa.naturalHeight + ')');
   log('sin botones croq : generar=' + !d.getElementById('btnCroquis') + ' preparar=' + !d.getElementById('btnPrepCroquis'));
   d.getElementById('f-receptor').selectedIndex = 1;
+  const obsTxa = d.getElementById('f-obs');
+  if (obsTxa) { obsTxa.value = 'Se socializó con el dirigente barrial; el hito está sin obstrucciones.'; obsTxa.dispatchEvent(new w.Event('input', { bubbles: true })); }
+  log('campo de observaciones: ' + (obsTxa ? 'presente' : 'FALTA'));
   altura.value = '1,532';
   altura.dispatchEvent(new w.Event('input', { bubbles: true }));
   const ini = d.querySelector('[data-ahora="inicio"]');
@@ -130,6 +134,7 @@ function leerFicha(codigo) {
   }
   log('tiempo del detalle: ' + Math.round(w.performance.now() - tD) + ' ms · fotos=' + d.getElementById('d-fotos').children.length);
   log('sin mapa         : ' + !d.getElementById('d-map'));
+  log('observaciones   : ' + (d.getElementById('d-obsPanel') && !d.getElementById('d-obsPanel').classList.contains('hidden') ? '"' + d.getElementById('d-obs').textContent + '"' : 'NO SE MUESTRAN'));
   // copia completa del día (ZIP con PDF + fotos + datos)
   d.getElementById('btnDetBack').click();
   await esperar(300);
@@ -160,7 +165,7 @@ function leerFicha(codigo) {
     const itemsR = [...d.querySelectorAll('.combo-item')];
     log('topbar ahora    : ' + d.getElementById('topSub').textContent + ' · ' + d.querySelector('.proybar b').textContent);
     log('rumiñahui       : ' + itemsR.length + ' fichas · ' + itemsR.map((x) => x.dataset.id).join(', '));
-    log('rumiñahui avance: ' + d.getElementById('avancePill').textContent);
+    log('rumiñahui avance: ' + (d.getElementById('avancePill') ? 'SIGUE' : 'retirada'));
     log('rumiñahui puntos: ' + (itemsR.some((x) => /RG-/.test(x.dataset.id)) ? 'SE COLÓ PEDRO MONCAYO' : 'sin puntos de Pedro Moncayo'));
     d.querySelector('.tabs button[data-tab="respaldo"]').click();
     await esperar(400);

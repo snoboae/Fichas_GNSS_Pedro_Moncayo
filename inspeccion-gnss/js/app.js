@@ -34,12 +34,12 @@ const App = (() => {
     const out = [];
     const plan = (PR() && PR().ruta) || { ida: [], vuelta: [] };
     if (!PR()) return out;
-    ['ida', 'vuelta'].forEach((tipo) => {
-      (plan[tipo] || []).forEach((codigo, i) => out.push({ id: idFicha(codigo, tipo), codigo, tipo, n: i + 1, plan: true }));
-    });
     /* Primer orden: una sola entrada por base. La ficha se crea para el día que se levanta. */
     (plan.base || []).forEach((codigo) => {
       out.push({ id: idBase(codigo), codigo, tipo: 'base', rol: 'base', n: null, plan: true });
+    });
+    ['ida', 'vuelta'].forEach((tipo) => {
+      (plan[tipo] || []).forEach((codigo, i) => out.push({ id: idFicha(codigo, tipo), codigo, tipo, n: i + 1, plan: true }));
     });
     /* punto adicional: una sola medición */
     (plan.unica || []).forEach((codigo) => {
@@ -210,16 +210,8 @@ const App = (() => {
     $('comboList').innerHTML = html || '<p class="hint" style="padding:14px">Sin resultados.</p>';
   }
 
-  function renderAvance() {
-    const total = planificadas() || sesiones().length;
-    const hechas = sesiones().filter((s) => s.plan && s.rol !== 'base' && miFicha(s.id)).length;
-    const bases = fichasProyecto().filter((f) => f.tipo === 'base').length;
-    $('avancePill').textContent = `${hechas} / ${total}` + (bases ? ` · ${bases} base(s)` : '');
-    $('progressBar').style.width = (hechas / Math.max(1, total) * 100).toFixed(1) + '%';
-  }
-
   function renderTodo() {
-    renderCombo(); renderAvance();
+    renderCombo();
     if (S.sel) { pintarComboVal(); pintarPanelPunto(); }
   }
 
@@ -325,6 +317,7 @@ const App = (() => {
     const tipo = ses.tipo, dia = ses.dia || null;
     return {
       id: ses.id, codigo: p.c, tipo, dia, sesion: ses.n || null, proyecto: S.proyecto,
+      observaciones: '',
       grupo: (typeof GRUPOS !== 'undefined' && GRUPOS[ses.rol || 'movil']) || '',
       nombre: p.nombre, parroquia: p.parroquia, sector: p.sector,
       este: p.e, norte: p.n, orden: p.orden, materializacion: p.mat,
@@ -404,6 +397,7 @@ const App = (() => {
     $('f-inicio').value = f.inicio || '';
     $('f-fin').value = f.fin || '';
     $('f-operador').value = f.operador || '';
+    if ($('f-obs')) $('f-obs').value = f.observaciones || '';
     pintarCroquis();
     pintarDuracion();
     pintarNotasDiseno();
@@ -431,6 +425,7 @@ const App = (() => {
     f.fin = $('f-fin').value;
     f.fecha = (f.inicio || hoy()).slice(0, 10);
     f.operador = $('f-operador').value.trim();
+    if ($('f-obs')) f.observaciones = $('f-obs').value.trim();
     f.metodo = METODO; f.mascara = MASCARA; f.intervalo = INTERVALO;
     f.actualizado = Date.now();
     pintarDuracion();
@@ -668,6 +663,13 @@ const App = (() => {
       return `<figure data-foto-id="${m.id}"><img src="${m.thumb}" alt="" loading="lazy"><figcaption>${esc(nom)} ${m.orden || ''}</figcaption></figure>`;
     });
     $('d-fotos').innerHTML = fotosHtml.join('') || '<p class="hint">Sin fotografías.</p>';
+
+    /* observaciones: solo se muestra el bloque si hay algo escrito */
+    const obs = String(f.observaciones || '').trim();
+    if ($('d-obsPanel')) {
+      $('d-obsPanel').classList.toggle('hidden', !obs);
+      if ($('d-obs')) $('d-obs').textContent = obs;
+    }
     $('d-fotosPanel').classList.toggle('hidden', !metas.length);
 
     const dr = f.drive || { estado: 'pend' };
@@ -815,7 +817,7 @@ const App = (() => {
     });
     const cols = ['id', 'codigo', 'tipo', 'jornada', 'grupo', 'sesion', 'parroquia', 'sector', 'orden', 'este', 'norte', 'materializacion',
       'receptor', 'altura_antena', 'inicio', 'fin', 'duracion_min', 'metodo', 'mascara', 'intervalo',
-      'operador', 'fotos_medicion', 'fotos_placa', 'fotos_extra', 'croquis', 'drive'];
+      'operador', 'fotos_medicion', 'fotos_placa', 'fotos_extra', 'croquis', 'drive', 'observaciones'];
     /* las bases llevan una fila por jornada registrada */
     const trabajo = [];
     sesiones().forEach((s) => {
@@ -836,7 +838,8 @@ const App = (() => {
         d.duracionMin || '', d.metodo || METODO, d.mascara || MASCARA, d.intervalo || INTERVALO,
         d.operador || '', c.punto, c.placa, c.extra,
         f ? 'incluido' : '—',
-        (d.drive && d.drive.estado) || (f ? 'pendiente' : 'sin ficha')];
+        (d.drive && d.drive.estado) || (f ? 'pendiente' : 'sin ficha'),
+        d.observaciones || ''];
     });
     const csv = '\ufeff' + [cols.join(';')].concat(filas.map((r) => r.map(csvQ).join(';'))).join('\r\n');
     bajarBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `avance_red_geodesica_${hoy()}.csv`);
@@ -857,6 +860,7 @@ const App = (() => {
           n_ida: nRuta(p.c, 'ida') || '', n_vuelta: nRuta(p.c, 'vuelta') || '',
           ficha_ida: si(ida), ficha_vuelta: si(vuelta),
           operador_ida: ida ? ida.operador || '' : '', operador_vuelta: vuelta ? vuelta.operador || '' : '',
+          obs_ida: ida ? ida.observaciones || '' : '', obs_vuelta: vuelta ? vuelta.observaciones || '' : '',
           receptor_ida: ida ? ida.receptor || '' : '', receptor_vuelta: vuelta ? vuelta.receptor || '' : '',
           dur_ida: ida ? ida.duracionMin || '' : '', dur_vuelta: vuelta ? vuelta.duracionMin || '' : '',
           base_jornadas: fichasBase(p.c).length,

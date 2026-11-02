@@ -31,6 +31,7 @@ const arg = process.argv[2] || 'RG-50-01';
 const minimo = arg === '--minimo';
 const sinFotos = minimo || process.argv.includes('--sinfotos');
 const rumi = process.argv.includes('--rumi');
+const sinObs = process.argv.includes('--sinobs');
 if (rumi && typeof PROYECTO_RUMI !== 'undefined') PROYECTO_ACTIVO = PROYECTO_RUMI;
 const LISTA = rumi ? PUNTOS_RUMI : PUNTOS;
 const p = minimo ? LISTA[0] : (LISTA.find((x) => x.c === arg) || LISTA[0]);
@@ -46,6 +47,7 @@ const ficha = {
   este: p.e, norte: p.n, orden: p.orden, materializacion: p.mat, lat, lon,
   inicio: '2026-10-31T09:15', fin: '2026-10-31T10:05', fecha: '2026-10-31',
   operador: 'Saúl Chicaiza', receptor: 'Hi-Target V90', alturaAntena: 1.532,
+  observaciones: 'Se socializó con el presidente del barrio; el hito está en buen estado y sin obstrucciones. Se dejó constancia con la comunidad.',
   metodo: 'Estático diferencial', mascara: 10, intervalo: 1, duracionMin: 50,
   tipo: process.argv.includes('--base') ? 'base' : process.argv.includes('--vuelta') ? 'vuelta' : 'ida',
   dia: process.argv.includes('--base') ? Number((process.argv.find((a) => /^--dia=/.test(a)) || '--dia=3').split('=')[1]) : null,
@@ -66,6 +68,7 @@ if (minimo) {
   });
 }
 
+if (sinObs) delete ficha.observaciones;
 const doc = PDF.fichaDoc(ficha, fotos, minimo ? null : croquis);
 const buf = Buffer.from(doc.output('arraybuffer'));
 const nombre = minimo ? 'ficha-minimo' : `ficha-${p.c}`;

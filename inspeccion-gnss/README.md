@@ -146,6 +146,16 @@ La app recuerda el último usado al abrirse (el menú vuelve a salir si se cierr
 Los tres croquis de Rumiñahui salen de la propia monografía y vienen incluidos en la app, igual que
 los 22 de Pedro Moncayo.
 
+### Observaciones (opcional)
+
+Cada ficha tiene un campo **Observaciones** que no es obligatorio: sirve para dejar por escrito lo que
+no cabe en los demás campos (acceso, novedades, estado del punto, coordinación con la comunidad).
+Sale en el **PDF** como bloque *5 · Observaciones* (solo si tiene texto; si está vacío, la ficha se ve
+exactamente igual que antes), se ve en el detalle de la ficha, y va también en el CSV, el GeoJSON y el
+`.json` que se sube a Drive.
+
+En la lista de puntos de Pedro Moncayo, las **tres bases de primer orden aparecen primero**.
+
 ### Qué se crea en Drive
 
 ```
