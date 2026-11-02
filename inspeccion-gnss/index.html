@@ -34,7 +34,7 @@ addEventListener('unhandledrejection', (e) => {
   <img class="toplogo" src="img/geocaliza.png" alt="Geocaliza">
   <div class="toptitle">
     <strong>Fichas GNSS</strong>
-    <span>Red geodésica · Pedro Moncayo</span>
+    <span id="topSub" data-proy-nombre>—</span>
   </div>
   <span id="net" class="net" title="Estado de conexión">en línea</span>
 </header>
@@ -52,8 +52,13 @@ addEventListener('unhandledrejection', (e) => {
 <!-- ===================== 1. PUNTOS ===================== -->
 <section id="v-puntos" class="view">
 
-  <div class="panel">
-    <h2>Seleccionar punto</h2>
+    <div class="bar wrap proybar">
+      <span>Levantamiento: <b data-proy-nombre>—</b></span>
+      <button class="btn small" data-cambiar-proyecto>Cambiar</button>
+    </div>
+
+    <div class="panel">
+      <h2>Seleccionar punto</h2>
     <p class="hint">Los 22 puntos del diseño de la red. El <b class="ok">✓ verde</b> indica que la ficha ya está guardada en este teléfono.</p>
 
     <!-- Lista desplegable (combo propio: permite el check verde por punto) -->
@@ -298,8 +303,8 @@ addEventListener('unhandledrejection', (e) => {
 <section id="v-respaldo" class="view hidden">
   <div class="panel">
     <h2>Levantamiento abierto</h2>
-    <p class="hint">Ahora mismo: <b id="proyectoNombre">—</b>. Cada levantamiento tiene sus propias fichas.</p>
-    <div class="row wrap"><button class="btn" id="btnCambiarProyecto">Cambiar de levantamiento</button></div>
+    <p class="hint">Ahora mismo: <b data-proy-nombre>—</b>. Cada levantamiento tiene sus propias fichas.</p>
+    <div class="row wrap"><button class="btn" data-cambiar-proyecto>Cambiar de levantamiento</button></div>
   </div>
   <div class="panel">
     <h2>Estado de la app</h2>

@@ -37,7 +37,9 @@ function leerFicha(codigo) {
   const btnPedro = d.querySelector('[data-proy="pedro"]');
   if (btnPedro) btnPedro.click();
   await esperar(700);
-  log('proyecto abierto: ' + (d.getElementById('proyectoNombre').textContent || '-'));
+  log('proyecto abierto: ' + (d.querySelector('[data-proy-nombre]').textContent || '-'));
+  log('barra del levantamiento: ' + (d.querySelector('.proybar') ? d.querySelector('.proybar').textContent.trim().replace(/\\s+/g, ' ') : 'FALTA'));
+  log('botones para cambiar: ' + d.querySelectorAll('[data-cambiar-proyecto]').length);
 
   const items = [...d.querySelectorAll('.combo-item')];
   log('total de sesiones: ' + items.length + ' (' + items.filter((x) => x.querySelector('.tipo.ida')).length + ' IDA / ' + items.filter((x) => x.querySelector('.tipo.vuelta')).length + ' VUELTA)');
@@ -145,7 +147,7 @@ function leerFicha(codigo) {
   /* ---- cambio a Pruebas Rumiñahui: 3 puntos, nada de Pedro Moncayo ---- */
   d.querySelectorAll('.tabs button').forEach((b) => { if (b.dataset.tab === 'respaldo') b.click(); });
   await esperar(300);
-  const btnCambiar = d.getElementById('btnCambiarProyecto');
+  const btnCambiar = d.querySelector('[data-cambiar-proyecto]');
   log('botón cambiar   : ' + (btnCambiar ? 'presente' : 'FALTA'));
   if (btnCambiar) {
     btnCambiar.click();
@@ -156,6 +158,7 @@ function leerFicha(codigo) {
     if (btnRumi) btnRumi.click();
     await esperar(800);
     const itemsR = [...d.querySelectorAll('.combo-item')];
+    log('topbar ahora    : ' + d.getElementById('topSub').textContent + ' · ' + d.querySelector('.proybar b').textContent);
     log('rumiñahui       : ' + itemsR.length + ' fichas · ' + itemsR.map((x) => x.dataset.id).join(', '));
     log('rumiñahui avance: ' + d.getElementById('avancePill').textContent);
     log('rumiñahui puntos: ' + (itemsR.some((x) => /RG-/.test(x.dataset.id)) ? 'SE COLÓ PEDRO MONCAYO' : 'sin puntos de Pedro Moncayo'));

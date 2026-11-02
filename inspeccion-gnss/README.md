@@ -137,8 +137,11 @@ Al abrir la app se elige con qué se va a trabajar:
 | **Levantamiento GNSS Pedro Moncayo** | los 22 de la red + 3 bases + 1 adicional | 37 + bases | `Inspección GNSS - Pedro Moncayo/` |
 
 Son **independientes**: las fichas guardadas, el avance, el CSV/GeoJSON, el ZIP de copia y el respaldo
-`.json` de un levantamiento **no incluyen nada del otro**. Se puede cambiar de levantamiento desde
-**Respaldo → Cambiar de levantamiento** (la app recuerda el último usado al abrirse).
+`.json` de un levantamiento **no incluyen nada del otro**.
+
+Para volver al menú de levantamientos hay un botón **Cambiar** en dos sitios: en la barra
+*"Levantamiento: …"* que está arriba de la lista de puntos, y en **Respaldo → Levantamiento abierto**.
+La app recuerda el último usado al abrirse (el menú vuelve a salir si se cierra y se abre).
 
 Los tres croquis de Rumiñahui salen de la propia monografía y vienen incluidos en la app, igual que
 los 22 de Pedro Moncayo.

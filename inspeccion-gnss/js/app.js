@@ -106,7 +106,10 @@ const App = (() => {
     const velo = $('v-proyecto');
     if (velo) velo.classList.add('hidden');
     document.body.classList.remove('sin-proyecto');
-    $('proyectoNombre').textContent = PROYECTOS[id].corto;
+    document.querySelectorAll('[data-proy-nombre]').forEach((el) => {
+      el.textContent = PROYECTOS[id].corto;
+    });
+    if ($('topSub')) $('topSub').textContent = PROYECTOS[id].corto;
     DB.kvSet('proyecto', id).catch(() => {});
     renderTodo();
     renderDrive();
@@ -114,14 +117,14 @@ const App = (() => {
     toast(PROYECTOS[id].nombre, 'ok');
   }
 
-  function pedirProyecto() {
+  function pedirProyecto(ultimo) {
     const velo = $('v-proyecto');
     if (!velo) return;
     const lista = $('proyectoLista');
     if (lista) {
       lista.innerHTML = Object.values(PROYECTOS).map((p) => `
         <button type="button" class="proy" data-proy="${p.id}">
-          <b>${esc(p.nombre)}</b>
+          <b>${esc(p.nombre)}${p.id === ultimo ? ' <i class="ultima">última vez</i>' : ''}</b>
           <span>${esc(p.detalle)}</span>
         </button>`).join('');
     }
@@ -1058,6 +1061,9 @@ const App = (() => {
       return;
     }
 
+    /* si el navegador bloquea el service worker, register() puede no devolver nada */
+    if (!swReg || typeof swReg.addEventListener !== 'function') return;
+
     navigator.serviceWorker.addEventListener('message', (e) => {
       const d = e.data || {};
       if (d.tipo === 'nueva-version') mostrarBarra(d.version);
@@ -1141,8 +1147,8 @@ const App = (() => {
 
     await Drive.init().catch(() => {});
     const guardado = await DB.kvGet('proyecto', '').catch(() => '');
-    const inicio = (typeof PROYECTOS !== 'undefined' && PROYECTOS[guardado]) ? guardado : '';
-    if (inicio) elegirProyecto(inicio); else pedirProyecto();
+    const ultimo = (typeof PROYECTOS !== 'undefined' && PROYECTOS[guardado]) ? guardado : '';
+    pedirProyecto(ultimo);   // el menú sale siempre al abrir; el último queda marcado
     renderTodo(); renderDrive();
     netState();
     estadoApp();
@@ -1277,9 +1283,9 @@ const App = (() => {
         if (b) elegirProyecto(b.dataset.proy);
       });
     }
-    if ($('btnCambiarProyecto')) {
-      $('btnCambiarProyecto').addEventListener('click', () => pedirProyecto());
-    }
+    document.querySelectorAll('[data-cambiar-proyecto]').forEach((b) => {
+      b.addEventListener('click', () => pedirProyecto());
+    });
 
     $('btnDetBack').addEventListener('click', () => { mostrar('puntos'); renderTodo(); });
     $('btnDetPdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
