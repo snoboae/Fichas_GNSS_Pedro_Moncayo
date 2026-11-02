@@ -76,3 +76,75 @@ const MATERIALIZACIONES = ['Mojón Tipo A', 'Mojón Tipo B', 'Placa 12 cm', 'Pla
 
 /* Receptores GNSS disponibles en el equipo de campo. */
 const RECEPTORES = ['Hi-Target V90', 'Gintec G40 Pro', 'Gintec G40 Plus', 'Foif A60 Pro'];
+
+/* ================= levantamientos =================
+   Dos proyectos independientes: cada uno con sus puntos, su ruta y su carpeta en Drive.
+   Lo que se guarde en uno no aparece ni se exporta en el otro. */
+let PROYECTO_ACTIVO = PROYECTO;
+const PROY = () => PROYECTO_ACTIVO || PROYECTO;
+
+/* --- Pruebas Rumiñahui: tres puntos de control, una sola medición cada uno --- */
+const PUNTOS_RUMI = [
+  {
+    "c": "PCA01", "nombre": "Redondel Carlota Jaramillo", "parroquia": "Sangolquí",
+    "sector": "Capelo", "e": 783047.63, "n": 9965405.728, "orden": "Control",
+    "mat": "Hito de concreto IGM-B",
+    "trabajos": "Punto de control de la monografía PCA01 (proyecto catastral del GAD Rumiñahui).",
+    "notas": ["Al sur del parque José Filotero Samaniego Salazar, en el redondel entre Mariana de Jesús y Carlota Jaramillo."]
+  },
+  {
+    "c": "PCA03", "nombre": "ESPE", "parroquia": "Sangolquí",
+    "sector": "ESPE", "e": 784011.519, "n": 9964701.432, "orden": "Control",
+    "mat": "Hito de concreto IGM-B",
+    "trabajos": "Punto de control de la monografía PCA03 (proyecto catastral del GAD Rumiñahui).",
+    "notas": ["Sector de la Universidad de las Fuerzas Armadas ESPE, Sangolquí."]
+  },
+  {
+    "c": "PCA04", "nombre": "Sangolquí centro", "parroquia": "Sangolquí",
+    "sector": "Sangolquí", "e": 783891.786, "n": 9964135.46, "orden": "Control",
+    "mat": "Hito de concreto IGM-B",
+    "trabajos": "Punto de control de la monografía PCA04 (proyecto catastral del GAD Rumiñahui).",
+    "notas": ["Casco urbano de Sangolquí."]
+  }
+];
+const RUTA_RUMI = { ida: [], vuelta: [], base: [], unica: ['PCA01', 'PCA03', 'PCA04'] };
+
+const PROYECTO_RUMI = {
+  "nombre": "Pruebas de campo del sistema de fichas · Rumiñahui",
+  "producto": "Prueba del registro de campo antes de la salida a Pedro Moncayo",
+  "contrato": "Prueba interna",
+  "proceso": "—",
+  "entidad": "GAD Municipal del Cantón Rumiñahui",
+  "area": "Pruebas de campo",
+  "consultor": "GEOCALIZA — Consultoría Integral",
+  "provincia": "Pichincha",
+  "canton": "Rumiñahui",
+  "zona": 17,
+  "hemisferio": "S",
+  "epsg": "EPSG:32717",
+  "datum": "WGS84",
+  "epoca": ""
+};
+
+const PROYECTOS = {
+  pedro: {
+    id: 'pedro',
+    nombre: 'Levantamiento GNSS Pedro Moncayo',
+    corto: 'Pedro Moncayo',
+    detalle: '22 puntos · ida y vuelta · 3 bases de primer orden',
+    raizDrive: 'Inspección GNSS - Pedro Moncayo',
+    datos: PROYECTO,
+    puntos: PUNTOS,
+    ruta: RUTA
+  },
+  rumi: {
+    id: 'rumi',
+    nombre: 'Pruebas Rumiñahui',
+    corto: 'Rumiñahui',
+    detalle: '3 puntos de control · una medición cada uno',
+    raizDrive: 'Pruebas GNSS - Rumiñahui',
+    datos: PROYECTO_RUMI,
+    puntos: PUNTOS_RUMI,
+    ruta: RUTA_RUMI
+  }
+};

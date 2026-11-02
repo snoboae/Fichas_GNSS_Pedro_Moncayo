@@ -29,6 +29,16 @@ function leerFicha(codigo) {
   await esperar(400);
   const d = w.document;
   log('arranque        : ' + (d.body.dataset.listo || 'no'));
+
+  /* pantalla de inicio: elegir levantamiento */
+  const velo = d.getElementById('v-proyecto');
+  log('selector inicial: visible=' + (velo && !velo.classList.contains('hidden')) +
+      ' · opciones=' + [...(d.querySelectorAll('[data-proy]') || [])].map((b) => b.dataset.proy).join(','));
+  const btnPedro = d.querySelector('[data-proy="pedro"]');
+  if (btnPedro) btnPedro.click();
+  await esperar(700);
+  log('proyecto abierto: ' + (d.getElementById('proyectoNombre').textContent || '-'));
+
   const items = [...d.querySelectorAll('.combo-item')];
   log('total de sesiones: ' + items.length + ' (' + items.filter((x) => x.querySelector('.tipo.ida')).length + ' IDA / ' + items.filter((x) => x.querySelector('.tipo.vuelta')).length + ' VUELTA)');
   log('numeración      : ' + items.slice(0, 3).map((x) => x.querySelector('.num').textContent + ':' + x.dataset.id).join(' | '));
@@ -38,8 +48,8 @@ function leerFicha(codigo) {
   log('bases sin ruta  : ' + items.filter((x) => /BASE/.test(x.dataset.id)).map((x) => x.dataset.id).filter((id) => !/-BASE-\\d+$/.test(id)).join(',') || 'ninguna');
   log('avance inicial  : ' + d.getElementById('avancePill').textContent);
   log('entradas base   : ' + items.filter((x) => /BASE/.test(x.dataset.id)).map((x) => x.dataset.id).join(', '));
-  const hoyISO = new Date().toISOString().slice(0, 10);
-  const idBase = 'RG-50-01-BASE-' + hoyISO;
+  const itemBaseRg = items.find((x) => /RG-50-01-BASE-/.test(x.dataset.id));
+  const idBase = itemBaseRg ? itemBaseRg.dataset.id : 'RG-50-01-BASE-x';
   w.confirm = () => true;
   const itemBase = d.querySelector('.combo-item[data-id="' + idBase + '"]');
   log('item de la base : ' + (itemBase ? 'encontrado' : 'NO ENCONTRADO'));
@@ -118,6 +128,41 @@ function leerFicha(codigo) {
   }
   log('tiempo del detalle: ' + Math.round(w.performance.now() - tD) + ' ms · fotos=' + d.getElementById('d-fotos').children.length);
   log('sin mapa         : ' + !d.getElementById('d-map'));
+  // copia completa del día (ZIP con PDF + fotos + datos)
+  d.getElementById('btnDetBack').click();
+  await esperar(300);
+  d.querySelectorAll('.tabs button').forEach((b) => { if (b.dataset.tab === 'respaldo') b.click(); });
+  await esperar(400);
+  log('días en la copia : ' + [...d.getElementById('diaCopia').options].map((o) => o.textContent).join(', '));
+  const nZip = [];
+  const bajar = w.URL.createObjectURL;
+  w.URL.createObjectURL = (b) => { if (b && b.size) nZip.push(b.size); return bajar.call(w.URL, b); };
+  d.getElementById('btnCopiaDia').click();
+  for (let i = 0; i < 60; i++) { await esperar(100); if (nZip.length) break; }
+  w.URL.createObjectURL = bajar;
+  log('ZIP de la copia  : ' + (nZip.length ? Math.round(nZip[0] / 1024) + ' KB' : 'NO SE GENERÓ'));
+  log('aviso de la copia: "' + d.getElementById('toast').textContent + '"');
+  /* ---- cambio a Pruebas Rumiñahui: 3 puntos, nada de Pedro Moncayo ---- */
+  d.querySelectorAll('.tabs button').forEach((b) => { if (b.dataset.tab === 'respaldo') b.click(); });
+  await esperar(300);
+  const btnCambiar = d.getElementById('btnCambiarProyecto');
+  log('botón cambiar   : ' + (btnCambiar ? 'presente' : 'FALTA'));
+  if (btnCambiar) {
+    btnCambiar.click();
+    await esperar(400);
+    const velo2 = d.getElementById('v-proyecto');
+    log('selector otra vez: ' + (velo2 && !velo2.classList.contains('hidden')));
+    const btnRumi = d.querySelector('[data-proy="rumi"]');
+    if (btnRumi) btnRumi.click();
+    await esperar(800);
+    const itemsR = [...d.querySelectorAll('.combo-item')];
+    log('rumiñahui       : ' + itemsR.length + ' fichas · ' + itemsR.map((x) => x.dataset.id).join(', '));
+    log('rumiñahui avance: ' + d.getElementById('avancePill').textContent);
+    log('rumiñahui puntos: ' + (itemsR.some((x) => /RG-/.test(x.dataset.id)) ? 'SE COLÓ PEDRO MONCAYO' : 'sin puntos de Pedro Moncayo'));
+    d.querySelector('.tabs button[data-tab="respaldo"]').click();
+    await esperar(400);
+    log('copia del día   : ' + [...d.getElementById('diaCopia').options].map((o) => o.textContent).join(','));
+  }
   log('errores          : ' + JSON.stringify((w.__errs || []).slice(0, 4)));
   log('— FIN —');
 })();

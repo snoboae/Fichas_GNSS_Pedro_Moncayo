@@ -40,6 +40,14 @@ addEventListener('unhandledrejection', (e) => {
 </header>
 
 <main>
+  <section id="v-proyecto" class="velo-proyecto">
+    <div class="caja">
+      <h1>¿Qué levantamiento vas a hacer?</h1>
+      <p class="hint">Cada uno guarda sus fichas y exporta lo suyo: lo de un levantamiento no aparece en el otro.</p>
+      <div id="proyectoLista" class="proys"></div>
+      <p class="hint tenue">Puedes cambiar de levantamiento cuando quieras desde <b>Respaldo</b>.</p>
+    </div>
+  </section>
 
 <!-- ===================== 1. PUNTOS ===================== -->
 <section id="v-puntos" class="view">
@@ -289,6 +297,11 @@ addEventListener('unhandledrejection', (e) => {
 <!-- ===================== 5. RESPALDO ===================== -->
 <section id="v-respaldo" class="view hidden">
   <div class="panel">
+    <h2>Levantamiento abierto</h2>
+    <p class="hint">Ahora mismo: <b id="proyectoNombre">—</b>. Cada levantamiento tiene sus propias fichas.</p>
+    <div class="row wrap"><button class="btn" id="btnCambiarProyecto">Cambiar de levantamiento</button></div>
+  </div>
+  <div class="panel">
     <h2>Estado de la app</h2>
     <p id="offlineState" class="hint"></p>
     <p class="hint" id="storageInfo"></p>
@@ -306,9 +319,16 @@ addEventListener('unhandledrejection', (e) => {
     <p class="hint" id="backupInfo"></p>
   </div>
   <div class="panel">
-    <h2>Fotografías</h2>
-    <p class="hint">Descarga un <code>.zip</code> con todas las fotos de todas las fichas y un índice CSV.</p>
-    <button class="btn" id="btnZipAll">Descargar todas las fotos (ZIP)</button>
+    <h2>Copia completa en el teléfono</h2>
+    <p class="hint">Un <code>.zip</code> con el <b>PDF</b>, las <b>fotografías</b> y los <b>datos</b> de cada ficha, con las mismas carpetas que en Drive (<code>2026_11_01/IDA_01_11_2026_RG-52-02/</code>).
+      En Android se guarda en <b>Descargas</b>; en iPhone se abre el menú para guardarlo en <b>Archivos</b>, donde puedes elegir la carpeta.</p>
+    <div class="row wrap">
+      <select id="diaCopia" class="sel"></select>
+      <button class="btn primary" id="btnCopiaDia">Copia de ese día</button>
+    </div>
+    <div class="row wrap">
+      <button class="btn" id="btnZipAll">Copia de todas las fichas</button>
+    </div>
     <p class="hint" id="zipInfo"></p>
   </div>
   <div class="panel">

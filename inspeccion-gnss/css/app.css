@@ -321,3 +321,29 @@ code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
   font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: var(--muted);
   padding: 12px 12px 5px; background: var(--bg); border-bottom: 1px solid var(--line);
 }
+/* selector de fecha (copia del día) */
+select.sel {
+  font: inherit; font-size: 15px; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--bg); color: var(--ink); min-height: 44px; flex: 1 1 150px; min-width: 0;
+}
+/* ---------- pantalla para elegir el levantamiento ---------- */
+.velo-proyecto {
+  position: fixed; inset: 0; z-index: 2500; overflow: auto;
+  display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+  background: linear-gradient(160deg, #0d2a4d 0%, #123a6b 55%, #0a2036 100%);
+}
+.velo-proyecto .caja { width: 100%; max-width: 520px; text-align: center; }
+.velo-proyecto h1 { font-size: 21px; color: #fff; margin: 0 0 6px; line-height: 1.25; }
+.velo-proyecto .hint { color: #c3d3e6; margin: 0 0 16px; }
+.velo-proyecto .hint.tenue { color: #8fa7c2; font-size: 12px; margin-top: 16px; }
+.proys { display: grid; gap: 12px; }
+.proy {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 16px 18px; border-radius: 16px; color: #fff;
+  border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.09);
+  transition: background .15s, transform .12s;
+}
+.proy b { display: block; font-size: 17px; margin-bottom: 4px; }
+.proy span { font-size: 13px; color: #c3d3e6; }
+.proy:hover { background: rgba(255,255,255,.16); }
+.proy:active { transform: scale(.985); }

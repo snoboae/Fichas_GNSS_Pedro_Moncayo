@@ -30,7 +30,10 @@ const foto = b64(path.join(demo, 'foto.jpg'));
 const arg = process.argv[2] || 'RG-50-01';
 const minimo = arg === '--minimo';
 const sinFotos = minimo || process.argv.includes('--sinfotos');
-const p = minimo ? PUNTOS[0] : (PUNTOS.find((x) => x.c === arg) || PUNTOS[0]);
+const rumi = process.argv.includes('--rumi');
+if (rumi && typeof PROYECTO_RUMI !== 'undefined') PROYECTO_ACTIVO = PROYECTO_RUMI;
+const LISTA = rumi ? PUNTOS_RUMI : PUNTOS;
+const p = minimo ? LISTA[0] : (LISTA.find((x) => x.c === arg) || LISTA[0]);
 const { lat, lon } = Geo.puntoLatLon(p);
 
 /* croquis: el que se genera con herramientas/genera_croquis.py */

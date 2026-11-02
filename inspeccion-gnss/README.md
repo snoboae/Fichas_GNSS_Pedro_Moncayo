@@ -113,6 +113,36 @@ las fotos en un ZIP. Ejemplo: `../Ejemplos fichas/Ejemplo ficha RG-50-01 (una ho
 La app sube los archivos a un **Google Apps Script** publicado por el dueño de la carpeta. No hay
 que crear proyecto en Google Cloud, no hay pantalla de permisos de Google y no caduca.
 
+### Copia de seguridad en el teléfono
+
+En **Respaldo → Copia completa en el teléfono** hay un `.zip` con el **PDF**, las **fotografías** y los
+**datos** de cada ficha, con las mismas carpetas que en Drive
+(`2026_11_01/IDA_01_11_2026_RG-52-02/`), más un `LEEME.txt` y un `indice_fotos.csv`:
+
+- **Copia de ese día**: eliges la fecha y baja solo lo de esa jornada.
+- **Copia de todas las fichas**: todo lo que hay en el teléfono.
+
+El navegador no puede escribir en una carpeta elegida por su cuenta: en **Android** el ZIP cae en
+**Descargas** y en **iPhone** se abre el menú para guardarlo en **Archivos**, donde sí puedes escoger
+la carpeta (por ejemplo crear una llamada “Fichas GNSS”). Conviene hacer la copia del día al terminar
+la jornada; Google Drive sigue siendo la copia principal.
+
+### Dos levantamientos
+
+Al abrir la app se elige con qué se va a trabajar:
+
+| Levantamiento | Puntos | Fichas | Carpeta en Drive |
+|---|---|---|---|
+| **Pruebas Rumiñahui** | PCA01, PCA03, PCA04 (control, una medición cada uno) | 3 | `Pruebas GNSS - Rumiñahui/` |
+| **Levantamiento GNSS Pedro Moncayo** | los 22 de la red + 3 bases + 1 adicional | 37 + bases | `Inspección GNSS - Pedro Moncayo/` |
+
+Son **independientes**: las fichas guardadas, el avance, el CSV/GeoJSON, el ZIP de copia y el respaldo
+`.json` de un levantamiento **no incluyen nada del otro**. Se puede cambiar de levantamiento desde
+**Respaldo → Cambiar de levantamiento** (la app recuerda el último usado al abrirse).
+
+Los tres croquis de Rumiñahui salen de la propia monografía y vienen incluidos en la app, igual que
+los 22 de Pedro Moncayo.
+
 ### Qué se crea en Drive
 
 ```

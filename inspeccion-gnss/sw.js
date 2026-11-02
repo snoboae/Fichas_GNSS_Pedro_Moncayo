@@ -1,7 +1,7 @@
 /* Service worker: la app abre y funciona sin conexión.
    - Archivos de la app: caché con actualización en segundo plano.
    - Teselas del mapa satelital: caché con límite (las que ya se vieron o generaron). */
-const VERSION = 'v0e8d1b8d';
+const VERSION = 'v0072d54c';
 const APP_CACHE = 'ig-app-' + VERSION;
 const TILE_CACHE = 'ig-tiles-v1';
 const MAX_TILES = 3000;
@@ -48,6 +48,9 @@ const APP_FILES = [
   'img/croquis/RG-54-03.jpg',
   'img/croquis/RG-54-04.jpg',
   'img/croquis/RG-SF-51-01.jpg',
+  'img/croquis/PCA01.jpg',
+  'img/croquis/PCA03.jpg',
+  'img/croquis/PCA04.jpg',
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-maskable-512.png'

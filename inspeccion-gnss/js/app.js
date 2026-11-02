@@ -22,7 +22,8 @@ const App = (() => {
   const idFicha = (codigo, tipo, jornada) => `${codigo}-${String(tipo).toUpperCase()}` +
     (String(tipo).toLowerCase() === 'base' ? `-${jornada || 1}` : '');
   const nRuta = (codigo, tipo) => {
-    const lista = (typeof RUTA !== 'undefined' && RUTA[tipo]) || [];
+    const pr = PR();
+    const lista = (pr && pr.ruta[tipo]) || [];
     const i = lista.indexOf(codigo);
     return i < 0 ? null : i + 1;
   };
@@ -31,7 +32,8 @@ const App = (() => {
      después las de los puntos que no están en la ruta, para no dejar ninguno fuera */
   function sesiones() {
     const out = [];
-    const plan = (typeof RUTA !== 'undefined') ? RUTA : { ida: [], vuelta: [] };
+    const plan = (PR() && PR().ruta) || { ida: [], vuelta: [] };
+    if (!PR()) return out;
     ['ida', 'vuelta'].forEach((tipo) => {
       (plan[tipo] || []).forEach((codigo, i) => out.push({ id: idFicha(codigo, tipo), codigo, tipo, n: i + 1, plan: true }));
     });
@@ -44,7 +46,7 @@ const App = (() => {
       out.push({ id: idFicha(codigo, 'unica'), codigo, tipo: 'unica', n: null, plan: true, rol: 'unica' });
     });
     const enRuta = new Set([].concat(plan.ida || [], plan.vuelta || [], plan.base || [], plan.unica || []));
-    PUNTOS.forEach((p) => {
+    PR().puntos.forEach((p) => {
       if (enRuta.has(p.c)) return;
       ['ida', 'vuelta'].forEach((tipo) => out.push({ id: idFicha(p.c, tipo), codigo: p.c, tipo, n: null, plan: false }));
     });
@@ -53,7 +55,7 @@ const App = (() => {
   /* Las bases se listan una sola vez; la ficha se crea para el día en que se levanta y su
      id lleva la fecha, igual que la carpeta en Drive: RG-50-01-BASE-2026-11-01. */
   const idBase = (codigo, fecha) => `${codigo}-BASE-${fecha || hoy()}`;
-  const fichasBase = (codigo) => Array.from(S.fichas.values())
+  const fichasBase = (codigo) => fichasProyecto()
     .filter((f) => f.tipo === 'base' && f.codigo === codigo)
     .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
   const baseDeHoy = (codigo) => {
@@ -61,9 +63,11 @@ const App = (() => {
     return f || null;
   };
 
-  const planificadas = () => (typeof RUTA === 'undefined' ? 0
-    : (RUTA.ida || []).length + (RUTA.vuelta || []).length
-      + (RUTA.unica || []).length);
+  const planificadas = () => {
+    const pr = PR();
+    if (!pr) return 0;
+    return (pr.ruta.ida || []).length + (pr.ruta.vuelta || []).length + (pr.ruta.unica || []).length;
+  };
 
   /* ---------------- estado ---------------- */
   const S = {
@@ -76,11 +80,54 @@ const App = (() => {
     miPunto: null,
     watchGps: null,
     urls: [],
+    proyecto: null,    // 'pedro' | 'rumi' (se elige al abrir la app)
     ajustes: { operadores: [], ultimoOperador: '', ultimoReceptor: '', autoSubir: true, borrarOrig: false }
   };
 
-  const P = (codigo) => PUNTOS.find((p) => p.c === codigo) || null;
-  const miFicha = (id) => S.fichas.get(id) || null;
+  /* proyecto activo (null hasta que se elige en la pantalla de inicio) */
+  const PR = () => (S.proyecto && typeof PROYECTOS !== 'undefined' ? PROYECTOS[S.proyecto] : null);
+  const P = (codigo) => {
+    const pr = PR();
+    return pr ? (pr.puntos.find((p) => p.c === codigo) || null) : null;
+  };
+  /* solo las fichas del levantamiento abierto */
+  const fichasProyecto = () => Array.from(S.fichas.values()).filter((f) => (f.proyecto || 'pedro') === S.proyecto);
+  const miFicha = (id) => {
+    const f = S.fichas.get(id);
+    return f && (f.proyecto || 'pedro') === S.proyecto ? f : null;
+  };
+
+  /* ---------------- levantamiento activo ---------------- */
+  function elegirProyecto(id) {
+    if (typeof PROYECTOS === 'undefined' || !PROYECTOS[id]) return;
+    S.proyecto = id;
+    PROYECTO_ACTIVO = PROYECTOS[id].datos;
+    S.sel = null;
+    const velo = $('v-proyecto');
+    if (velo) velo.classList.add('hidden');
+    document.body.classList.remove('sin-proyecto');
+    $('proyectoNombre').textContent = PROYECTOS[id].corto;
+    DB.kvSet('proyecto', id).catch(() => {});
+    renderTodo();
+    renderDrive();
+    mostrar('puntos');
+    toast(PROYECTOS[id].nombre, 'ok');
+  }
+
+  function pedirProyecto() {
+    const velo = $('v-proyecto');
+    if (!velo) return;
+    const lista = $('proyectoLista');
+    if (lista) {
+      lista.innerHTML = Object.values(PROYECTOS).map((p) => `
+        <button type="button" class="proy" data-proy="${p.id}">
+          <b>${esc(p.nombre)}</b>
+          <span>${esc(p.detalle)}</span>
+        </button>`).join('');
+    }
+    velo.classList.remove('hidden');
+    document.body.classList.add('sin-proyecto');
+  }
 
   /* ---------------- avisos ---------------- */
   let toastT = null;
@@ -160,7 +207,7 @@ const App = (() => {
   function renderAvance() {
     const total = planificadas() || sesiones().length;
     const hechas = sesiones().filter((s) => s.plan && s.rol !== 'base' && miFicha(s.id)).length;
-    const bases = Array.from(S.fichas.values()).filter((f) => f.tipo === 'base').length;
+    const bases = fichasProyecto().filter((f) => f.tipo === 'base').length;
     $('avancePill').textContent = `${hechas} / ${total}` + (bases ? ` · ${bases} base(s)` : '');
     $('progressBar').style.width = (hechas / Math.max(1, total) * 100).toFixed(1) + '%';
   }
@@ -202,18 +249,19 @@ const App = (() => {
     const jornadas = esBase ? fichasBase(s.codigo).length : 0;
     const otraTipo = s.tipo === 'ida' ? 'vuelta' : 'ida';
     const otra = miFicha(idFicha(s.codigo, otraTipo));
-    const totalTipo = ((typeof RUTA !== 'undefined' && RUTA[s.tipo]) || []).length;
+    const totalTipo = ((PR() && PR().ruta[s.tipo]) || []).length;
     $('panelPunto').classList.remove('hidden');
     $('pp-nombre').innerHTML = esc(p.c) + ' ' + badge(s.tipo, s.dia);
     const detalleRuta = esBase
       ? ` · base de primer orden · ${jornadas} jornada(s) registrada(s)`
       : s.rol === 'unica' ? ' · medición única'
         : s.n ? ` · ${TIPOS[s.tipo]} ${s.n} de ${totalTipo}` : ' · sin ruta asignada';
-    $('pp-sub').textContent = `${p.parroquia} · ${p.orden}° orden · ${p.mat}` + detalleRuta;
+    const ordenTxt = typeof p.orden === 'number' ? `${p.orden}° orden` : (p.orden || '');
+  $('pp-sub').textContent = `${p.parroquia} · ${ordenTxt} · ${p.mat}` + detalleRuta;
     $('pp-datos').innerHTML = [
       ['ESTE (X)', p.e.toLocaleString('es-EC')],
       ['NORTE (Y)', p.n.toLocaleString('es-EC')],
-      ['ZONA / DATUM', `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`],
+      ['ZONA / DATUM', `UTM ${PROY().zona}${PROY().hemisferio} · WGS84`],
       ['SECTOR / SITIO', p.sector],
       [esBase ? 'HOY' : TIPOS[s.tipo], f ? (f.drive && f.drive.estado === 'subida' ? 'Guardada · en Drive' : 'Guardada en el teléfono') : 'Pendiente de levantar'],
       esBase ? ['ÚLTIMA', jornadas ? `Del ${PDF.fmtFecha(fichasBase(s.codigo)[0].fecha)}` : '—']
@@ -270,7 +318,7 @@ const App = (() => {
     const { lat, lon } = Geo.puntoLatLon(p);
     const tipo = ses.tipo, dia = ses.dia || null;
     return {
-      id: ses.id, codigo: p.c, tipo, dia, sesion: ses.n || null,
+      id: ses.id, codigo: p.c, tipo, dia, sesion: ses.n || null, proyecto: S.proyecto,
       grupo: (typeof GRUPOS !== 'undefined' && GRUPOS[ses.rol || 'movil']) || '',
       nombre: p.nombre, parroquia: p.parroquia, sector: p.sector,
       este: p.e, norte: p.n, orden: p.orden, materializacion: p.mat,
@@ -342,7 +390,7 @@ const App = (() => {
     $('f-este').value = Number(f.este).toLocaleString('es-EC');
     $('f-norte').value = Number(f.norte).toLocaleString('es-EC');
     $('f-orden').value = `${f.orden}° orden`;
-    $('f-zona').value = `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`;
+    $('f-zona').value = `UTM ${PROY().zona}${PROY().hemisferio} · WGS84`;
     const p = P(f.codigo);
     $('f-trabajos').textContent = p ? p.trabajos : '';
     $('f-receptor').innerHTML = '<option value="">—</option>' + RECEPTORES.map((r) => `<option${r === f.receptor ? ' selected' : ''}>${esc(r)}</option>`).join('');
@@ -471,7 +519,10 @@ const App = (() => {
     const etiqueta = tipo === 'extra' ? $('f-extra-nombre').value.trim() : '';
     busy(true, 'Procesando fotografías…');
     try {
-      let orden = S.fotosEditor.filter((m) => m.tipo === tipo).length;
+      /* el número sigue al mayor existente: al borrar una foto no se reusa un número
+         (si se reusara, al subir se sobrescribiría el archivo de otra foto) */
+      const usados = S.fotosEditor.filter((m) => m.tipo === tipo).map((m) => m.orden || 0);
+      let orden = usados.length ? Math.max.apply(null, usados) : 0;
       for (const file of files) {
         const pr = await Fotos.procesar(file);
         orden += 1;
@@ -582,12 +633,12 @@ const App = (() => {
     $('d-titulo').innerHTML = esc(f.codigo) + ' ' + badge(f.tipo || 'ida', f.dia);
     $('d-sub').textContent = `${f.parroquia} · ${f.orden}° orden · ${f.materializacion || ''}`;
     const d = duracionMin(f);
-    const totalTipo = ((typeof RUTA !== 'undefined' && RUTA[f.tipo]) || []).length;
+    const totalTipo = ((PR() && PR().ruta[f.tipo]) || []).length;
     $('d-datos').innerHTML = [
       ['TIPO', `${TIPOS[f.tipo || 'ida']}${f.sesion ? ` (${f.sesion} de ${totalTipo})` : ''}`],
       ['ESTE (X)', Number(f.este).toLocaleString('es-EC')],
       ['NORTE (Y)', Number(f.norte).toLocaleString('es-EC')],
-      ['ZONA / DATUM', `UTM ${PROYECTO.zona}${PROYECTO.hemisferio} · WGS84`],
+      ['ZONA / DATUM', `UTM ${PROY().zona}${PROY().hemisferio} · WGS84`],
       ['FECHA', PDF.fmtFecha(f.fecha)],
       ['INICIO', PDF.fmtFechaHora(f.inicio)],
       ['FIN', PDF.fmtFechaHora(f.fin)],
@@ -665,7 +716,7 @@ const App = (() => {
       busy(true, 'Preparando la subida…');
       const { blob } = await pdfDe(id);
       const fotos = await fotosParaDrive(id);
-      const r = await Drive.subirFicha(f, blob, fotos, (t) => busy(true, t));
+      const r = await Drive.subirFicha(f, blob, fotos, (t) => busy(true, t), PR().raizDrive);
       f.drive = { estado: 'subida', fecha: Date.now(), ruta: r.ruta, archivos: r.archivos, sinConfirmar: !!r.sinConfirmar };
       await DB.put('fichas', f);
       S.fichas.set(id, f);
@@ -697,7 +748,7 @@ const App = (() => {
       try {
         const { blob } = await pdfDe(f.id);
         const fotos = await fotosParaDrive(f.id);
-        const r = await Drive.subirFicha(f, blob, fotos);
+        const r = await Drive.subirFicha(f, blob, fotos, null, PR().raizDrive);
         f.drive = { estado: 'subida', fecha: Date.now(), ruta: r.ruta, archivos: r.archivos, sinConfirmar: !!r.sinConfirmar };
         ok++;
       } catch (e) {
@@ -726,7 +777,7 @@ const App = (() => {
     $('driveUrl').value = Drive.urlActual() || '';
     $('driveClave').value = Drive.claveActual() || '';
 
-    const todas = Array.from(S.fichas.values());
+    const todas = fichasProyecto();
     const total = todas.length;
     const subidas = todas.filter((f) => f.drive && f.drive.estado === 'subida').length;
     const errores = todas.filter((f) => f.drive && f.drive.estado === 'error').length;
@@ -735,7 +786,7 @@ const App = (() => {
     $('autoSubir').checked = !!S.ajustes.autoSubir;
     $('borrarOrig').checked = !!S.ajustes.borrarOrig;
 
-    $('driveCola').innerHTML = Array.from(S.fichas.values())
+    $('driveCola').innerHTML = fichasProyecto()
       .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
       .map((f) => {
       const e = (f.drive && f.drive.estado) || 'pend';
@@ -786,7 +837,7 @@ const App = (() => {
   }
 
   function geojsonPuntos() {
-    const feats = PUNTOS.map((p) => {
+    const feats = (PR() ? PR().puntos : []).map((p) => {
       const ida = miFicha(idFicha(p.c, 'ida'));
       const vuelta = miFicha(idFicha(p.c, 'vuelta'));
       const { lat, lon } = Geo.puntoLatLon(p);
@@ -820,36 +871,90 @@ const App = (() => {
     } else bajarBlob(new Blob([geojsonPuntos()], { type: 'application/geo+json' }), nombre);
   }
 
-  async function exportarZip(id) {
-    busy(true, 'Empaquetando fotografías…');
-    try {
-      const fichas = id ? [miFicha(id)] : Array.from(S.fichas.values());
-      const entradas = [];
-      const indice = [['id', 'codigo', 'tipo', 'foto', 'etiqueta', 'orden', 'archivo', 'ancho', 'alto', 'fecha']];
-      for (const f of fichas) {
-        if (!f) continue;
-        const etq = TIPOS[f.tipo || 'ida'];
-        for (const m of await Fotos.byFicha(f.id)) {
-          const blob = await Fotos.getBlob(m.id);
-          if (!blob) continue;
-          const nombre = `${f.codigo}/${f.codigo}_${etq}_${NOMBRE_TIPO[m.tipo] || m.tipo}_${m.orden}.jpg`;
-          entradas.push({ name: nombre, blob });
-          indice.push([f.id, f.codigo, f.tipo, m.tipo, m.etiqueta || '', m.orden, nombre, m.w, m.h, new Date(m.tomada || Date.now()).toISOString()]);
-        }
+  /* ---------- copia completa (PDF + fotos + datos) ---------- */
+  const etiquetaDe = (f) => {
+    const tipo = String(f.tipo || 'ida').toLowerCase();
+    if (tipo === 'base') return 'BASE';
+    if (tipo === 'unica') return 'UNICA';
+    return tipo === 'vuelta' ? 'VUELTA' : 'IDA';
+  };
+  const fechaDe = (f) => String(f.fecha || hoy()).slice(0, 10);
+  const carpetaDe = (f) => {
+    const fecha = fechaDe(f);
+    const [aa, mm, dd] = fecha.split('-');
+    return `${fecha.replace(/-/g, '_')}/${etiquetaDe(f)}_${dd}_${mm}_${aa}_${f.codigo}`;
+  };
+
+  const LEEME = (titulo) => [
+    'Copia de las fichas de campo · Red Geodésica Pedro Moncayo',
+    'Generada: ' + new Date().toLocaleString('es-EC') + (titulo ? ' · ' + titulo : ''),
+    '',
+    'Cada carpeta tiene el mismo nombre que en Google Drive:',
+    '  <año_mes_día>/<TIPO>_<dd_mm_aaaa>_<CÓDIGO>/',
+    '    <CÓDIGO>_<TIPO>.pdf          ficha de una hoja',
+    '    <CÓDIGO>_<TIPO>_medicion_N.jpg',
+    '    <CÓDIGO>_<TIPO>_placa_N.jpg',
+    '    <CÓDIGO>_<TIPO>_<etiqueta>_N.jpg',
+    '    datos_<CÓDIGO>_<TIPO>.json    todos los datos de la ficha',
+    '',
+    'indice_fotos.csv lista cada fotografía con su ficha y su archivo.',
+    'La app no incluye los croquis aquí: van dentro de cada PDF.'
+  ].join('\n');
+
+  async function paqueteZip(fichas, etiquetaArchivo) {
+    const entradas = [];
+    const indice = [['id', 'codigo', 'tipo', 'fecha', 'foto', 'etiqueta', 'orden', 'archivo', 'ancho', 'alto']];
+    for (const f of fichas) {
+      if (!f) continue;
+      const etq = etiquetaDe(f);
+      const carpeta = carpetaDe(f);
+      const { blob: pdf } = await pdfDe(f.id);
+      entradas.push({ name: `${carpeta}/${f.codigo}_${etq}.pdf`, blob: pdf });
+      const datos = JSON.stringify({ app: 'inspeccion-gnss', version: CONFIG.version, exportado: new Date().toISOString(), ficha: f }, null, 2);
+      entradas.push({ name: `${carpeta}/datos_${f.codigo}_${etq}.json`, blob: new Blob([datos], { type: 'application/json' }) });
+      for (const m of await Fotos.byFicha(f.id)) {
+        const blob = await Fotos.getBlob(m.id);
+        if (!blob) continue;
+        const nombre = `${carpeta}/${f.codigo}_${etq}_${NOMBRE_TIPO[m.tipo] || m.tipo}_${m.orden}.jpg`;
+        entradas.push({ name: nombre, blob });
+        indice.push([f.id, f.codigo, f.tipo, fechaDe(f), m.tipo, m.etiqueta || '', m.orden, nombre, m.w, m.h]);
       }
-      if (!entradas.length) { toast('No hay fotografías para exportar.', 'err'); return; }
-      const csv = '\ufeff' + indice.map((r) => r.map(csvQ).join(';')).join('\r\n');
-      entradas.push({ name: 'indice_fotos.csv', blob: new Blob([csv], { type: 'text/csv' }) });
-      const zip = await Zip.build(entradas);
-      bajarBlob(zip, id ? `fotos_${safe(id)}.zip` : `fotos_red_geodesica_${hoy()}.zip`);
-      toast('ZIP generado.', 'ok');
+    }
+    if (!entradas.length) { toast('No hay fichas guardadas para copiar.', 'err'); return false; }
+    const csv = '\ufeff' + indice.map((r) => r.map(csvQ).join(';')).join('\r\n');
+    entradas.push({ name: 'indice_fotos.csv', blob: new Blob([csv], { type: 'text/csv' }) });
+    entradas.push({ name: 'LEEME.txt', blob: new Blob([LEEME(etiquetaArchivo)], { type: 'text/plain;charset=utf-8' }) });
+    const zip = await Zip.build(entradas);
+    bajarBlob(zip, `copia_fichas_${etiquetaArchivo.replace(/[^\w.-]+/g, '_')}_${hoy()}.zip`);
+    return true;
+  }
+
+  async function exportarZip(id) {
+    busy(true, 'Empaquetando la copia…');
+    try {
+      const fichas = id ? [miFicha(id)] : fichasProyecto();
+      const hecho = await paqueteZip(fichas, id ? id : 'todas');
+      if (hecho) toast('Copia generada.', 'ok');
     } catch (e) {
-      toast('No se pudo generar el ZIP: ' + e.message, 'err');
+      toast('No se pudo generar la copia: ' + e.message, 'err');
+    } finally { busy(false); }
+  }
+
+  /* copia de un día concreto (por la fecha de las fichas) */
+  async function exportarDia(fecha) {
+    const lista = fichasProyecto().filter((f) => fechaDe(f) === fecha);
+    if (!lista.length) { toast('No hay fichas de ese día.', 'err'); return; }
+    busy(true, `Empaquetando ${lista.length} ficha(s)…`);
+    try {
+      const hecho = await paqueteZip(lista, fecha.replace(/-/g, '_'));
+      if (hecho) toast(`Copia del ${fecha.split('-').reverse().join('/')} generada.`, 'ok');
+    } catch (e) {
+      toast('No se pudo generar la copia: ' + e.message, 'err');
     } finally { busy(false); }
   }
 
   async function exportarRespaldo() {
-    const lista = Array.from(S.fichas.values()).map((f) => {
+    const lista = fichasProyecto().map((f) => {
       const c = Object.assign({}, f);
       delete c.croquis;
       return c;
@@ -859,7 +964,7 @@ const App = (() => {
       proyecto: PROYECTO, ajustes: S.ajustes, fichas: lista
     };
     bajarBlob(new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' }), `respaldo_red_geodesica_${hoy()}.json`);
-    $('backupInfo').textContent = `Respaldo generado con ${lista.length} ficha(s). Incluye los datos; no incluye fotografías ni croquis (usa el ZIP o Drive).`;
+    $('backupInfo').textContent = `Respaldo generado con ${lista.length} ficha(s) de ${PR().corto}. Incluye los datos; no incluye fotografías ni croquis (usa el ZIP o Drive).`;
   }
 
   async function importarRespaldo(file) {
@@ -923,7 +1028,7 @@ const App = (() => {
 
   function pintarVersion() {
     const el = $('versionInfo');
-    if (el) el.textContent = `Versión ${CONFIG.version}${buildSW ? ' · build ' + buildSW : ''} · ${PROYECTO.nombre}`;
+    if (el) el.textContent = `Versión ${CONFIG.version}${buildSW ? ' · build ' + buildSW : ''} · ${PROY().nombre}`;
   }
 
   async function buscarActualizacion() {
@@ -1027,13 +1132,23 @@ const App = (() => {
     const validos = new Set(fichas.map((f) => f.id));
     for (const m of await DB.all('pmeta')) if (!validos.has(m.fichaId)) await Fotos.remove(m.id);
 
+    /* fichas viejas: eran del levantamiento de Pedro Moncayo */
+    let migradas = 0;
+    for (const f of S.fichas.values()) {
+      if (!f.proyecto) { f.proyecto = 'pedro'; await DB.put('fichas', f); migradas++; }
+    }
+    if (migradas) await cargarFichas();
+
     await Drive.init().catch(() => {});
+    const guardado = await DB.kvGet('proyecto', '').catch(() => '');
+    const inicio = (typeof PROYECTOS !== 'undefined' && PROYECTOS[guardado]) ? guardado : '';
+    if (inicio) elegirProyecto(inicio); else pedirProyecto();
     renderTodo(); renderDrive();
     netState();
     estadoApp();
     cablear();
     document.body.dataset.listo = '1';
-    console.log(`Inspección GNSS lista · ${PUNTOS.length} puntos · ${planificadas()} fichas planificadas · ${fichas.length} guardadas`);
+    console.log(`Inspección GNSS lista · ${fichas.length} ficha(s) guardada(s)`);
   }
 
   function netState() {
@@ -1053,6 +1168,18 @@ const App = (() => {
     } catch (e) { /* sin datos */ }
     const p = await Fotos.peso();
     $('storageInfo').textContent = (txt ? txt + ' ' : '') + `Fotografías: ${p.n} (${(p.bytes / 1048576).toFixed(1)} MB).`;
+    /* días con fichas, para la copia por día */
+    const dias = Array.from(new Set(fichasProyecto().map(fechaDe))).sort().reverse();
+    const sel = $('diaCopia');
+    const antes = sel.value;
+    sel.innerHTML = dias.length
+      ? dias.map((d) => `<option value="${d}">${d.split('-').reverse().join('/')}</option>`).join('')
+      : '<option value="">— sin fichas —</option>';
+    if (antes && dias.includes(antes)) sel.value = antes;
+    $('zipInfo').textContent = dias.length
+      ? `${S.fichas.size} ficha(s) guardada(s) en ${dias.length} día(s).`
+      : 'Todavía no hay fichas guardadas.';
+
     $('offlineState').textContent = navigator.onLine
       ? 'La app está guardada en este teléfono: abre y funciona sin conexión.'
       : 'Sin conexión: puedes seguir levantando fichas; la subida a Drive se completa cuando vuelva el internet.';
@@ -1143,6 +1270,17 @@ const App = (() => {
       if (blob) verImagen(URL.createObjectURL(blob));
     });
 
+    const veloProy = $('v-proyecto');
+    if (veloProy) {
+      veloProy.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-proy]');
+        if (b) elegirProyecto(b.dataset.proy);
+      });
+    }
+    if ($('btnCambiarProyecto')) {
+      $('btnCambiarProyecto').addEventListener('click', () => pedirProyecto());
+    }
+
     $('btnDetBack').addEventListener('click', () => { mostrar('puntos'); renderTodo(); });
     $('btnDetPdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
     $('d-pdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
@@ -1216,6 +1354,11 @@ const App = (() => {
     $('btnBackup').addEventListener('click', exportarRespaldo);
     $('fileRestore').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) importarRespaldo(f); e.target.value = ''; });
     $('btnZipAll').addEventListener('click', () => exportarZip(null));
+    $('btnCopiaDia').addEventListener('click', () => {
+      const d = $('diaCopia').value;
+      if (!d) { toast('Todavía no hay fichas guardadas.', 'err'); return; }
+      exportarDia(d);
+    });
     $('btnCsv').addEventListener('click', exportarCsv);
     $('btnGeo').addEventListener('click', () => exportarGeo(null));
     $('btnBuscar').addEventListener('click', buscarActualizacion);

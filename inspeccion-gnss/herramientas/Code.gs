@@ -73,7 +73,7 @@ function doPost(e) {
 
     // Dos niveles: <raíz>/<aaaa_mm_dd>/<TIPO[jornada]_dd_mm_aaaa_CÓDIGO>/
     // Antes de crear cada carpeta se busca por nombre; nunca se duplica.
-    var dia = carpetaDe(String(j.dia || hoy().replace(/-/g, '_')), carpetaRaiz());
+    var dia = carpetaDe(String(j.dia || hoy().replace(/-/g, '_')), carpetaRaiz(j.raiz));
     var carpetaFicha = carpetaDeFicha(String(j.carpeta || 'sin-codigo'), dia);
     var bytes = Utilities.base64Decode(j.datos);
     var blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', j.nombre);
@@ -94,7 +94,16 @@ function doPost(e) {
 }
 
 // --------------------------------- ayudantes ---------------------------------
-function carpetaRaiz() { return carpeta(CARPETA_RAIZ, null); }
+/* Cada levantamiento tiene su carpeta raíz. Solo se aceptan estos nombres. */
+var RAIZ_VALIDAS = ['Inspección GNSS - Pedro Moncayo', 'Pruebas GNSS - Rumiñahui'];
+
+function carpetaRaiz(nombre) {
+  var n = String(nombre || CARPETA_RAIZ);
+  if (RAIZ_VALIDAS.indexOf(n) < 0) n = CARPETA_RAIZ;
+  var it = DriveApp.getFoldersByName(n);
+  if (it.hasNext()) return it.next();
+  return DriveApp.createFolder(n);
+}
 
 function carpeta(nombre, padre) {
   var it = padre ? padre.getFoldersByName(nombre) : DriveApp.getFoldersByName(nombre);

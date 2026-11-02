@@ -136,15 +136,22 @@ const PDF = (() => {
   /* ---------------- encabezado institucional ---------------- */
   function encabezado(doc, f) {
     const LG = LOGOS;
-    const hPM = 11.2, wPM = hPM * (LG.pedroMoncayo.w / LG.pedroMoncayo.h);
-    doc.addImage(LG.pedroMoncayo.data, 'PNG', M, 4.6, wPM, hPM);
+    const esPedroMoncayo = String(PROY().canton || '').toLowerCase().indexOf('pedro moncayo') >= 0;
+    if (esPedroMoncayo) {
+      const hPM = 11.2, wPM = hPM * (LG.pedroMoncayo.w / LG.pedroMoncayo.h);
+      doc.addImage(LG.pedroMoncayo.data, 'PNG', M, 4.6, wPM, hPM);
+    } else {
+      /* otro levantamiento: el nombre de la entidad en lugar del logo municipal */
+      txt(doc, (PROY().entidad || '').toUpperCase(), M, 8.4, { size: 7.2, bold: true, color: NAVY, wrap: 62, lh: 3.2 });
+      txt(doc, 'PRUEBAS DE CAMPO', M, 14.6, { size: 5.8, bold: true, color: GRAY, space: 0.8 });
+    }
     const hGC = 9.8, wGC = hGC * (LG.geocaliza.w / LG.geocaliza.h);
     doc.addImage(LG.geocaliza.data, 'PNG', PW - M - wGC, 5.4, wGC, hGC);
 
     // El título del proyecto ocupa el centro (es lo primero que se lee)
     const cx = PW / 2;
     txt(doc, 'PROYECTO', cx, 7.4, { size: 5.8, bold: true, color: GRAY, align: 'center', space: 1.1 });
-    const nombre = (PROYECTO.nombre || '').toUpperCase();
+    const nombre = (PROY().nombre || '').toUpperCase();
     let fsTitulo = 10.2;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(fsTitulo);
     while (doc.getTextWidth(nombre) > 196 && fsTitulo > 7.6) {
@@ -152,7 +159,7 @@ const PDF = (() => {
       doc.setFontSize(fsTitulo);
     }
     txt(doc, nombre, cx, 11.9, { size: fsTitulo, bold: true, color: NAVY, align: 'center' });
-    txt(doc, `${PROYECTO.contrato} · Proceso ${PROYECTO.proceso}`, cx, 15.6, { size: 6.2, color: GRAY, align: 'center' });
+    txt(doc, `${PROY().contrato} · Proceso ${PROY().proceso}`, cx, 15.6, { size: 6.2, color: GRAY, align: 'center' });
 
     // banda con el título de la ficha
     const by = 18.6, bh = 9.4;
@@ -190,12 +197,12 @@ const PDF = (() => {
     seccion(doc, '1', 'Identificación del punto', y);
     const t = y + 6.6, h = 7.2, cw = CW / 6;
     celda(doc, M, t, cw * 2, h, 'CÓDIGO / NOMINATIVO', f.codigo, { bold: true, size: 10 });
-    celda(doc, M + cw * 2, t, cw, h, 'ORDEN', ORD[f.orden] || '—');
+    celda(doc, M + cw * 2, t, cw, h, 'ORDEN', ORD[f.orden] || (typeof f.orden === 'string' ? f.orden : '') || '—');
     celda(doc, M + cw * 3, t, cw, h, 'PARROQUIA', f.parroquia, { bold: true });
     celda(doc, M + cw * 4, t, cw * 2, h, 'FECHA', fmtFecha(f.fecha));
     const t2 = t + h;
-    celda(doc, M, t2, cw, h, 'PROVINCIA', PROYECTO.provincia);
-    celda(doc, M + cw, t2, cw, h, 'CANTÓN', PROYECTO.canton);
+    celda(doc, M, t2, cw, h, 'PROVINCIA', PROY().provincia);
+    celda(doc, M + cw, t2, cw, h, 'CANTÓN', PROY().canton);
     celda(doc, M + cw * 2, t2, cw * 4, h, 'SECTOR / SITIO', f.sector);
     return t2 + h;
   }
@@ -209,7 +216,7 @@ const PDF = (() => {
 
     doc.setFillColor(...SOFT); doc.setDrawColor(...LINE); doc.setLineWidth(0.18);
     doc.rect(xA, t, wA, 4.4, 'FD'); doc.rect(xB, t, wB, 4.4, 'FD');
-    txt(doc, `COORDENADAS UTM ${PROYECTO.zona}${PROYECTO.hemisferio} — WGS84`, xA + 1.8, t + 3.1, { size: 5.6, bold: true, color: NAVY });
+    txt(doc, `COORDENADAS UTM ${PROY().zona}${PROY().hemisferio} — WGS84`, xA + 1.8, t + 3.1, { size: 5.6, bold: true, color: NAVY });
     txt(doc, 'MATERIALIZACIÓN Y EQUIPO', xB + 1.8, t + 3.1, { size: 5.6, bold: true, color: NAVY });
 
     const r0 = t + 4.4;
@@ -222,7 +229,7 @@ const PDF = (() => {
     const filasA = [
       ['ESTE — X (m)', miles(f.este)],
       ['NORTE — Y (m)', miles(f.norte)],
-      [`ZONA UTM`, `${PROYECTO.zona} ${PROYECTO.hemisferio}  ·  ${PROYECTO.epsg}`],
+      [`ZONA UTM`, `${PROY().zona} ${PROY().hemisferio}  ·  ${PROY().epsg}`],
       ['MÉTODO / PARÁMETROS DEL TR', metodo]
     ];
     const filasB = [
@@ -268,7 +275,7 @@ const PDF = (() => {
     // nota al pie de las fotografías (ocupa el espacio libre de la columna)
     const yNota = yImg + hF + 6.4;
     const nota = 'Registro de campo de la observación GNSS. Las coordenadas X/Y corresponden al diseño de la red ' +
-      `geodésica cantonal (WGS84, UTM ${PROYECTO.zona} ${PROYECTO.hemisferio}) y no sustituyen la monografía ` +
+      `geodésica cantonal (WGS84, UTM ${PROY().zona} ${PROY().hemisferio}) y no sustituyen la monografía ` +
       'definitiva del punto.' + (nExtra ? ` Se archivaron ${nExtra} foto(s) adicional(es) en Google Drive.` : '');
     const cabe = Math.max(1, Math.floor((BOTTOM - yNota) / 2.45));
     const ln = recortar(lineas(doc, nota, wR - 2, 6.1, 'italic'), cabe);
@@ -289,8 +296,8 @@ const PDF = (() => {
     // ---------- pie ----------
     doc.setDrawColor(...LINE); doc.setLineWidth(0.25);
     doc.line(M, PH - 8.2, PW - M, PH - 8.2);
-    txt(doc, `${PROYECTO.entidad} · ${PROYECTO.area}`, M, PH - 4.4, { size: 5.7, color: GRAY });
-    txt(doc, `${PROYECTO.contrato} · Proceso ${PROYECTO.proceso}`, PW / 2, PH - 4.4, { size: 5.7, color: GRAY, align: 'center' });
+    txt(doc, `${PROY().entidad} · ${PROY().area}`, M, PH - 4.4, { size: 5.7, color: GRAY });
+    txt(doc, `${PROY().contrato} · Proceso ${PROY().proceso}`, PW / 2, PH - 4.4, { size: 5.7, color: GRAY, align: 'center' });
     txt(doc, `Ficha generada con la app Inspección GNSS v${CONFIG.version} · Página 1 de 1`, PW - M, PH - 4.4, { size: 5.7, color: GRAY, align: 'right' });
     return doc;
   }

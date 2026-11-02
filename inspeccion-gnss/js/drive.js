@@ -174,6 +174,7 @@ const Drive = (() => {
     return enviar({
       clave,
       op: 'subir',
+      raiz: o.raiz,
       dia: o.dia,
       carpeta: o.carpeta,
       punto: o.punto,
@@ -184,7 +185,7 @@ const Drive = (() => {
   }
 
   /* ficha: registro; pdfBlob: Blob del PDF; fotos: [{tipo, orden, nombre, orig, blob, origTipo}] */
-  async function subirFicha(ficha, pdfBlob, fotos, onPaso) {
+  async function subirFicha(ficha, pdfBlob, fotos, onPaso, raiz) {
     if (!configurado()) throw new ErrorDrive('Falta configurar la URL y la clave del script de Drive.', 'sin_config');
     const paso = (t) => { if (onPaso) onPaso(t); };
     const punto = ficha.codigo;
@@ -200,7 +201,7 @@ const Drive = (() => {
     const archivos = [];
 
     paso('Ficha PDF…');
-    await subirArchivo({ dia, carpeta, punto, nombre: `${base}.pdf`, mime: 'application/pdf', blob: pdfBlob });
+    await subirArchivo({ raiz, dia, carpeta, punto, nombre: `${base}.pdf`, mime: 'application/pdf', blob: pdfBlob });
     archivos.push(`${base}.pdf`);
 
     const lista = fotos || [];
@@ -218,7 +219,7 @@ const Drive = (() => {
       const nombre = `${base}_${n}_${f.orden || (i + 1)}${ext}`;
       paso(`Foto ${i + 1} de ${lista.length}…`);
       await subirArchivo({
-        dia, carpeta, punto, nombre,
+        raiz, dia, carpeta, punto, nombre,
         mime: usarOriginal ? (f.origTipo || mimeDe(ext)) : 'image/jpeg',
         blob: cuerpo
       });
@@ -232,14 +233,14 @@ const Drive = (() => {
       subido: new Date().toISOString()
     }, null, 2);
     await subirArchivo({
-      dia, carpeta, punto,
+      raiz, dia, carpeta, punto,
       nombre: `datos_${base}.json`,
       mime: 'application/json',
       blob: new Blob([datos], { type: 'application/json' })
     });
     archivos.push(`datos_${base}.json`);
 
-    const ruta = `${CONFIG.carpetaProyecto}/${dia}/${carpeta}`;
+    const ruta = `${raiz || CONFIG.carpetaProyecto}/${dia}/${carpeta}`;
     return { ruta, archivos, carpeta, dia, fecha };
   }
 
