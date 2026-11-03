@@ -105,6 +105,24 @@ addEventListener('unhandledrejection', (e) => {
       <button class="btn small" id="btnGeo">Exportar puntos (GeoJSON)</button>
     </div>
   </div>
+
+  <div class="panel">
+    <h2>Brújula</h2>
+    <p class="hint">Para orientar el receptor hacia el <b>norte</b>. Apoya el teléfono plano, lejos de
+      objetos metálicos y del vehículo; la aguja se pone <b class="verde">verde</b> cuando apuntas al norte.</p>
+    <div class="brujula sin-datos" id="brujula">
+      <svg id="brujulaRosa" viewBox="0 0 200 200" aria-hidden="true"></svg>
+      <span class="brj-indice" aria-hidden="true"></span>
+    </div>
+    <div class="brj-lectura">
+      <b id="brujulaGrados">—</b>
+      <span id="brujulaRumbo">sin datos</span>
+    </div>
+    <div class="row wrap">
+      <button class="btn primary" id="btnBrujula">Activar brújula</button>
+    </div>
+    <p class="hint" id="brujulaMsg">La brújula se activa con un toque (el navegador lo exige en iPhone).</p>
+  </div>
 </section>
 
 <!-- ===================== 2. FICHA ===================== -->
@@ -390,6 +408,7 @@ addEventListener('unhandledrejection', (e) => {
 <script src="js/zip.js"></script>
 <script src="js/pdf.js"></script>
 <script src="js/drive.js"></script>
+<script src="js/brujula.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

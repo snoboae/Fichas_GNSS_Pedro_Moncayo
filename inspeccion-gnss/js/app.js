@@ -1294,6 +1294,19 @@ const App = (() => {
       b.addEventListener('click', () => pedirProyecto());
     });
 
+    /* brújula: la rosa se dibuja al abrir; el sensor se enciende con un toque */
+    if ($('btnBrujula') && typeof Brujula !== 'undefined') {
+      Brujula.dibujar();
+      $('btnBrujula').addEventListener('click', async () => {
+        const r = await Brujula.iniciar();
+        if (!r.ok) toast(r.motivo, 'err');
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) Brujula.detener();
+        else Brujula.reanudar();
+      });
+    }
+
     $('btnDetBack').addEventListener('click', () => { mostrar('puntos'); renderTodo(); });
     $('btnDetPdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
     $('d-pdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));

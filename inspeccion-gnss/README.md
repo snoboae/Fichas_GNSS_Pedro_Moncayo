@@ -156,6 +156,18 @@ exactamente igual que antes), se ve en el detalle de la ficha, y va también en 
 
 En la lista de puntos de Pedro Moncayo, las **tres bases de primer orden aparecen primero**.
 
+### Brújula (para orientar el receptor)
+
+En **Puntos**, debajo de *Exportar*, hay una brújula que sirve para dejar el receptor mirando al norte:
+
+- Se enciende con el botón **Activar brújula** (en iPhone el navegador exige un toque; Android también).
+- La rosa gira con el teléfono y abajo se lee el rumbo en grados (`347°`) y el nombre (`NNO`, `E`, `S`…).
+- Cuando apuntas al norte (±4°) todo el dial pasa de **azul a verde** y vibra una vez.
+- Es magnética: no corrige la declinación (en Ecuador son ~3–5° al oeste). Para el acta basta con
+  apuntar “al norte”; si quieres precisión, resta esa declinación.
+- Se apaga sola al salir de la app y se reanuda al volver. Si el teléfono no tiene brújula, avisa y no
+  molesta.
+
 ### Qué se crea en Drive
 
 ```

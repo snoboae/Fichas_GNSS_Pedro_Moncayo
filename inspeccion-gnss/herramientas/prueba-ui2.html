@@ -171,6 +171,36 @@ function leerFicha(codigo) {
     await esperar(400);
     log('copia del día   : ' + [...d.getElementById('diaCopia').options].map((o) => o.textContent).join(','));
   }
+  /* ---- brújula: eventos de orientación simulados ---- */
+  d.querySelectorAll('.tabs button').forEach((b) => { if (b.dataset.tab === 'puntos') b.click(); });
+  await esperar(400);
+  const hayBrujula = !!d.getElementById('brujulaRosa');
+  log('brújula         : ' + (hayBrujula ? 'presente · trazos=' + d.querySelectorAll('#brujulaRosa *').length : 'FALTA'));
+  if (hayBrujula) {
+    d.getElementById('btnBrujula').click();
+    await esperar(300);
+    const lanzar = (alpha) => {
+      const ev = new w.DeviceOrientationEvent('deviceorientationabsolute', { alpha, beta: 0, gamma: 0, absolute: true });
+      w.dispatchEvent(ev);
+    };
+    lanzar(300);   // 360-300 = 60°
+    await esperar(500);
+    const caja = d.getElementById('brujula');
+    const rosa = d.getElementById('brujulaRosa');
+    log('sensor 60°      : texto=' + d.getElementById('brujulaGrados').textContent +
+        ' · rumbo=' + d.getElementById('brujulaRumbo').textContent +
+        ' · giro=' + rosa.style.transform + ' · verde=' + caja.classList.contains('norte'));
+    lanzar(0);     // 0° = norte
+    await esperar(900);
+    log('sensor norte    : texto=' + d.getElementById('brujulaGrados').textContent +
+        ' · rumbo=' + d.getElementById('brujulaRumbo').textContent +
+        ' · verde=' + caja.classList.contains('norte'));
+    lanzar(90);    // 270° (oeste)
+    await esperar(900);
+    log('sensor 270°     : rumbo=' + d.getElementById('brujulaRumbo').textContent +
+        ' · verde=' + caja.classList.contains('norte') +
+        ' · aviso="' + d.getElementById('brujulaMsg').textContent + '"');
+  }
   log('errores          : ' + JSON.stringify((w.__errs || []).slice(0, 4)));
   log('— FIN —');
 })();

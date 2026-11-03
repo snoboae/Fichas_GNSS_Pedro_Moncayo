@@ -1,7 +1,7 @@
 /* Service worker: la app abre y funciona sin conexión.
    - Archivos de la app: caché con actualización en segundo plano.
    - Teselas del mapa satelital: caché con límite (las que ya se vieron o generaron). */
-const VERSION = 'v6292c41b';
+const VERSION = 'v8c5a7d95';
 const APP_CACHE = 'ig-app-' + VERSION;
 const TILE_CACHE = 'ig-tiles-v1';
 const MAX_TILES = 3000;
@@ -23,6 +23,7 @@ const APP_FILES = [
   'js/zip.js',
   'js/pdf.js',
   'js/drive.js',
+  'js/brujula.js',
   'js/app.js',
   'lib/jspdf/jspdf.umd.min.js',
   // croquis de los 22 puntos, generados con herramientas/genera_croquis.py
