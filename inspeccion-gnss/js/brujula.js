@@ -92,9 +92,11 @@ const Brujula = (() => {
 
     // suavizado por el camino corto
     if (rumbo != null) {
+      /* ángulo continuo (sin normalizar): al cruzar el norte no salta de 359 a 0 */
       const d = ((rumbo - mostrado + 540) % 360) - 180;
-      mostrado = (mostrado + d * 0.22 + 360) % 360;
+      mostrado += d * 0.22;
     }
+    const grados = ((Math.round(mostrado) % 360) + 360) % 360;
     rosa.style.transform = `rotate(${-mostrado}deg)`;
 
     const cerca = rumbo != null && difNorte(rumbo) <= TOL;
@@ -102,11 +104,11 @@ const Brujula = (() => {
     caja.classList.toggle('sin-datos', rumbo == null);
 
     const g = $('brujulaGrados');
-    if (g) g.textContent = rumbo == null ? '—' : String(Math.round(mostrado) % 360).padStart(3, '0') + '°';
+    if (g) g.textContent = rumbo == null ? '—' : String(grados).padStart(3, '0') + '°';
     const r = $('brujulaRumbo');
     if (r) {
       r.textContent = rumbo == null ? 'sin datos'
-        : cerca ? 'NORTE' : RUMBOS[Math.round(mostrado / 22.5) % 16];
+        : cerca ? 'NORTE' : RUMBOS[Math.round(grados / 22.5) % 16];
     }
     const m = $('brujulaMsg');
     if (m && rumbo != null) {

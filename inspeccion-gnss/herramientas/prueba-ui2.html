@@ -195,6 +195,13 @@ function leerFicha(codigo) {
     log('sensor norte    : texto=' + d.getElementById('brujulaGrados').textContent +
         ' · rumbo=' + d.getElementById('brujulaRumbo').textContent +
         ' · verde=' + caja.classList.contains('norte'));
+    lanzar(1);     // 359°, justo antes del norte
+    await esperar(800);
+    const tAntes = rosa.style.transform;
+    lanzar(0);     // 0°: cruce del norte (no debe girar 360)
+    await esperar(800);
+    log('cruce del norte : ' + tAntes + ' → ' + rosa.style.transform +
+        ' · verde=' + caja.classList.contains('norte'));
     lanzar(90);    // 270° (oeste)
     await esperar(900);
     log('sensor 270°     : rumbo=' + d.getElementById('brujulaRumbo').textContent +

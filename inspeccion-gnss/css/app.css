@@ -387,7 +387,8 @@ select.sel {
   position: absolute; inset: 3%;
   width: 94%; height: 94%;
   transform: rotate(0deg);
-  transition: transform .06s linear;
+  /* sin transición: el suavizado ya lo hace el bucle; una transición aquí
+     provoca el giro de 360° al pasar por el norte */
   will-change: transform;
 }
 #brujulaRosa .aro { fill: none; stroke: var(--br); stroke-width: 2.4; opacity: .9; }
