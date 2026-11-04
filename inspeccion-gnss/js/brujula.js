@@ -119,8 +119,8 @@ const Brujula = (() => {
     const m = $('brujulaMsg');
     if (m && rumbo != null) {
       m.textContent = !magnetico
-        ? 'Este teléfono no está dando una orientación referida al norte magnético. ' +
-          'Muévelo en forma de ocho para calibrar el magnetómetro y vuelve a intentar.'
+        ? 'El teléfono no está entregando una orientación referida al norte magnético. ' +
+          'Muévelo en forma de ocho (dos o tres vueltas) y espera unos segundos.'
         : cerca
           ? 'Alineado al norte magnético: ya puedes marcar la dirección del receptor.'
           : (difNorte(rumbo) < 45
@@ -184,7 +184,10 @@ const Brujula = (() => {
 
     // el evento 'absolute' es el que está referido al norte magnético
     const oyenteAbs = (e) => recibir(e, true);
-    const oyenteRel = (e) => { if (!magnetico) recibir(e, false); };
+    /* OJO: en iOS el único evento es 'deviceorientation' y su webkitCompassHeading ya es
+       magnético, así que no se puede descartar por el estado: el filtro de las lecturas
+       relativas de verdad está dentro de recibir(). */
+    const oyenteRel = (e) => recibir(e, false);
     window.addEventListener('deviceorientationabsolute', oyenteAbs, true);
     detenerFns.push(() => window.removeEventListener('deviceorientationabsolute', oyenteAbs, true));
     window.addEventListener('deviceorientation', oyenteRel, true);

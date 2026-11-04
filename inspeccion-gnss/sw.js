@@ -1,7 +1,7 @@
 /* Service worker: la app abre y funciona sin conexión.
    - Archivos de la app: caché con actualización en segundo plano.
    - Teselas del mapa satelital: caché con límite (las que ya se vieron o generaron). */
-const VERSION = 'v270d8ecf';
+const VERSION = 'v583766d9';
 const APP_CACHE = 'ig-app-' + VERSION;
 const TILE_CACHE = 'ig-tiles-v1';
 const MAX_TILES = 3000;

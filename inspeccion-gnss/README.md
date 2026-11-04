@@ -172,6 +172,16 @@ En **Puntos**, debajo de *Exportar*, hay una brújula que sirve para dejar el re
 - Se apaga sola al salir de la app y se reanuda al volver. Si el teléfono no tiene brújula, avisa y no
   molesta.
 
+**iPhone**: la primera vez Safari pide permiso (*Ajustes → Safari → Movimiento y orientación* debe estar
+activo); si se deniega, la app lo dice. Hay que abrirla en **Safari** o desde el ícono instalado, no
+dentro del navegador de WhatsApp/Instagram.
+
+**Calibrar no es rutina**: el magnetómetro se calibra solo. Muévelo en forma de ocho solo cuando la
+aguja se quede pegada, salte o apunte claramente mal: al llegar a un sitio nuevo, cerca de metal o del
+carro, o después de un golpe. Alcanza con hacerlo **al empezar la jornada** en el sitio; no hace falta en
+cada punto. Ojo con las fundas con imán y con los clips magnéticos para el teléfono: desvían la brújula
+de forma permanente mientras estén puestos.
+
 ### Qué se crea en Drive
 
 ```

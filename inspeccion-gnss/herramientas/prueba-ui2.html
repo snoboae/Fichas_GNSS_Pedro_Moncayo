@@ -214,6 +214,22 @@ function leerFicha(codigo) {
         ' · verde=' + caja.classList.contains('norte') +
         ' · aviso="' + d.getElementById('brujulaMsg').textContent + '"');
   }
+  /* ---- iPhone: webkitCompassHeading (el evento NO es 'absolute') ---- */
+  const evIOS = (rumbo) => {
+    const ev = new w.Event('deviceorientation');
+    ev.alpha = 0; ev.beta = 90; ev.gamma = 0; ev.absolute = false;
+    ev.webkitCompassHeading = rumbo;
+    w.dispatchEvent(ev);
+  };
+  evIOS(90);
+  await esperar(800);
+  const ios1 = d.getElementById('brujulaRosa').style.transform;
+  evIOS(180);
+  await esperar(900);
+  const ios2 = d.getElementById('brujulaRosa').style.transform;
+  log('iphone 90→180   : ' + ios1 + ' → ' + ios2 +
+      ' · rumbo=' + d.getElementById('brujulaRumbo').textContent +
+      ' · se mueve=' + (ios1 !== ios2));
   log('errores          : ' + JSON.stringify((w.__errs || []).slice(0, 4)));
   log('— FIN —');
 })();
