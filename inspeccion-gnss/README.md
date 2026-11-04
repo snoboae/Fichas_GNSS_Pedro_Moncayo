@@ -162,9 +162,13 @@ En **Puntos**, debajo de *Exportar*, hay una brújula que sirve para dejar el re
 
 - Se enciende con el botón **Activar brújula** (en iPhone el navegador exige un toque; Android también).
 - La rosa gira con el teléfono y abajo se lee el rumbo en grados (`347°`) y el nombre (`NNO`, `E`, `S`…).
-- Cuando apuntas al norte (±4°) todo el dial pasa de **azul a verde** y vibra una vez.
-- Es magnética: no corrige la declinación (en Ecuador son ~3–5° al oeste). Para el acta basta con
-  apuntar “al norte”; si quieres precisión, resta esa declinación.
+- Cuando apuntas al **norte magnético** (±4°) todo el dial pasa de **azul a verde** y vibra una vez;
+  la lectura dice `NORTE MAG.` para que no haya duda de a qué norte se refiere.
+- Usa **siempre la lectura absoluta** (magnetómetro): si el teléfono solo entrega orientación relativa,
+  la app lo avisa, no se pone verde y pide calibrar moviendo el teléfono en forma de ocho.
+- **Norte magnético ≠ norte geográfico**: la diferencia es la declinación del lugar (en el callejón
+  interandino, unos 2–3° al oeste). La app usa el magnético a propósito, que es el que se puede medir
+  en campo con el teléfono; no aplica corrección.
 - Se apaga sola al salir de la app y se reanuda al volver. Si el teléfono no tiene brújula, avisa y no
   molesta.
 

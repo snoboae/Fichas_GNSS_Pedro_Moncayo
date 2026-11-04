@@ -12,6 +12,7 @@ const Brujula = (() => {
 
   let activa = false, queria = false;
   let rumbo = null;              // último rumbo recibido (0..360)
+  let magnetico = false;         // ¿la lectura está referida al norte magnético?
   let mostrado = 0;              // rumbo suavizado que se dibuja
   let raf = 0, vibrado = false, vioEvento = false, temporizador = 0;
   let detenerFns = [];
@@ -70,16 +71,21 @@ const Brujula = (() => {
   }
 
   /* ---------- lectura del sensor ---------- */
-  function rumboDe(e) {
-    let h = null;
+  /* Devuelve { h, mag } o null. 'mag' dice si el rumbo está referido al
+     norte magnético: iOS lo entrega en webkitCompassHeading; en Android solo
+     los eventos 'absolute' (deviceorientationabsolute) usan el magnetómetro. */
+  function rumboDe(e, absoluto) {
+    let h = null, mag = false;
     if (typeof e.webkitCompassHeading === 'number' && isFinite(e.webkitCompassHeading)) {
-      h = e.webkitCompassHeading;                       // iOS: ya viene 0=N, sentido horario
+      h = e.webkitCompassHeading;                       // iOS: 0 = norte magnético, horario
+      mag = true;
     } else if (typeof e.alpha === 'number' && isFinite(e.alpha)) {
       h = 360 - e.alpha;                                // alpha crece en sentido antihorario
+      mag = !!absoluto || e.absolute === true;
     }
     if (h == null) return null;
     const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-    return ((h + Number(ang || 0)) % 360 + 360) % 360;
+    return { h: ((h + Number(ang || 0)) % 360 + 360) % 360, mag };
   }
 
   /* ---------- pintado ---------- */
@@ -99,7 +105,7 @@ const Brujula = (() => {
     const grados = ((Math.round(mostrado) % 360) + 360) % 360;
     rosa.style.transform = `rotate(${-mostrado}deg)`;
 
-    const cerca = rumbo != null && difNorte(rumbo) <= TOL;
+    const cerca = rumbo != null && magnetico && difNorte(rumbo) <= TOL;
     caja.classList.toggle('norte', !!cerca);
     caja.classList.toggle('sin-datos', rumbo == null);
 
@@ -108,15 +114,18 @@ const Brujula = (() => {
     const r = $('brujulaRumbo');
     if (r) {
       r.textContent = rumbo == null ? 'sin datos'
-        : cerca ? 'NORTE' : RUMBOS[Math.round(grados / 22.5) % 16];
+        : cerca ? 'NORTE MAG.' : RUMBOS[Math.round(grados / 22.5) % 16];
     }
     const m = $('brujulaMsg');
     if (m && rumbo != null) {
-      m.textContent = cerca
-        ? 'Alineado al norte: ya puedes marcar la dirección del receptor.'
-        : (difNorte(rumbo) < 45
-          ? (rumbo < 180 ? '← Gira un poco a la izquierda' : 'Gira un poco a la derecha →')
-          : 'Gira el teléfono hasta que la N quede arriba.');
+      m.textContent = !magnetico
+        ? 'Este teléfono no está dando una orientación referida al norte magnético. ' +
+          'Muévelo en forma de ocho para calibrar el magnetómetro y vuelve a intentar.'
+        : cerca
+          ? 'Alineado al norte magnético: ya puedes marcar la dirección del receptor.'
+          : (difNorte(rumbo) < 45
+            ? (rumbo < 180 ? '← Gira un poco a la izquierda' : 'Gira un poco a la derecha →')
+            : 'Gira el teléfono hasta que la N quede arriba.');
     }
 
     // vibración corta al entrar en norte
@@ -164,19 +173,22 @@ const Brujula = (() => {
       return perm;
     }
 
-    const nuevo = () => { vioEvento = true; };
-    const manejar = (e) => {
-      const h = rumboDe(e);
-      if (h == null) return;
+    const recibir = (e, absoluto) => {
+      const r = rumboDe(e, absoluto);
+      if (!r) return;
+      if (!r.mag && magnetico) return;      // no dejar que una lectura relativa pise la magnética
       vioEvento = true;
-      rumbo = h;
+      rumbo = r.h;
+      magnetico = r.mag;
     };
 
-    // se escuchan los dos nombres: el absoluto es el que da norte real
-    window.addEventListener('deviceorientationabsolute', manejar, true);
-    detenerFns.push(() => window.removeEventListener('deviceorientationabsolute', manejar, true));
-    window.addEventListener('deviceorientation', manejar, true);
-    detenerFns.push(() => window.removeEventListener('deviceorientation', manejar, true));
+    // el evento 'absolute' es el que está referido al norte magnético
+    const oyenteAbs = (e) => recibir(e, true);
+    const oyenteRel = (e) => { if (!magnetico) recibir(e, false); };
+    window.addEventListener('deviceorientationabsolute', oyenteAbs, true);
+    detenerFns.push(() => window.removeEventListener('deviceorientationabsolute', oyenteAbs, true));
+    window.addEventListener('deviceorientation', oyenteRel, true);
+    detenerFns.push(() => window.removeEventListener('deviceorientation', oyenteRel, true));
 
     activa = true;
     if (!raf) raf = requestAnimationFrame(pintar);
@@ -199,6 +211,7 @@ const Brujula = (() => {
     limpiar();
     activa = false;
     rumbo = null;
+    magnetico = false;
     mostrado = 0;
     const caja = $('brujula');
     if (caja) { caja.classList.remove('norte'); caja.classList.add('sin-datos'); }

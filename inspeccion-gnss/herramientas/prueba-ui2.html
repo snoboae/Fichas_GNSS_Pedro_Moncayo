@@ -202,6 +202,12 @@ function leerFicha(codigo) {
     await esperar(800);
     log('cruce del norte : ' + tAntes + ' → ' + rosa.style.transform +
         ' · verde=' + caja.classList.contains('norte'));
+    /* una lectura relativa (sin magnetómetro) no debe pisar la magnética */
+    w.dispatchEvent(new w.DeviceOrientationEvent('deviceorientation',
+      { alpha: 180, beta: 0, gamma: 0, absolute: false }));
+    await esperar(700);
+    log('lectura relativa: giro=' + rosa.style.transform + ' · verde=' +
+        caja.classList.contains('norte') + ' · chip=' + d.getElementById('brujulaRumbo').textContent);
     lanzar(90);    // 270° (oeste)
     await esperar(900);
     log('sensor 270°     : rumbo=' + d.getElementById('brujulaRumbo').textContent +

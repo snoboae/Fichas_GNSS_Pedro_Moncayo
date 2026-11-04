@@ -108,8 +108,9 @@ addEventListener('unhandledrejection', (e) => {
 
   <div class="panel">
     <h2>Brújula</h2>
-    <p class="hint">Para orientar el receptor hacia el <b>norte</b>. Apoya el teléfono plano, lejos de
-      objetos metálicos y del vehículo; la aguja se pone <b class="verde">verde</b> cuando apuntas al norte.</p>
+    <p class="hint">Para orientar el receptor hacia el <b>norte magnético</b> (el que marca el compás).
+      Apoya el teléfono plano, lejos de objetos metálicos y del vehículo; la aguja se pone
+      <b class="verde">verde</b> cuando apuntas a ese norte.</p>
     <div class="brujula sin-datos" id="brujula">
       <svg id="brujulaRosa" viewBox="0 0 200 200" aria-hidden="true"></svg>
       <span class="brj-indice" aria-hidden="true"></span>
@@ -122,6 +123,9 @@ addEventListener('unhandledrejection', (e) => {
       <button class="btn primary" id="btnBrujula">Activar brújula</button>
     </div>
     <p class="hint" id="brujulaMsg">La brújula se activa con un toque (el navegador lo exige en iPhone).</p>
+    <p class="hint brj-nota">Trabaja con el <b>norte magnético</b>, que es el que se puede medir en campo.
+      El <b>norte geográfico</b> queda a un lado por la declinación magnética del lugar (en el callejón
+      interandino son pocos grados, del orden de 2–3° al oeste); no se corrige aquí a propósito.</p>
   </div>
 </section>
 
