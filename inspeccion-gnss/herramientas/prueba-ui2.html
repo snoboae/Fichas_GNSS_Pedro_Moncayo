@@ -218,6 +218,91 @@ function leerFicha(codigo) {
     log('sale a puntos   : ' + !d.getElementById('v-puntos').classList.contains('hidden'));
   }
 
+  /* ---- ficha duplicada en Drive: el aviso debe salir y no quedarse "Revisando Drive…" ---- */
+  d.querySelectorAll('.tabs button').forEach((b) => { if (b.dataset.tab === 'puntos') b.click(); });
+  await esperar(300);
+
+  /* dos fotos de prueba para que la ficha quede "completa" */
+  const pngB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+  const ponerFoto = (fichaId, tipo, orden) => new Promise((res) => {
+    const rq = indexedDB.open('fichas-gnss');
+    rq.onsuccess = () => {
+      const db = rq.result;
+      const bytes = Uint8Array.from(atob(pngB64), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const tx = db.transaction(['photos', 'pmeta'], 'readwrite');
+      tx.objectStore('photos').put({ id: 'p-' + fichaId + '-' + tipo, blob, orig: blob });
+      tx.objectStore('pmeta').put({
+        id: 'p-' + fichaId + '-' + tipo, fichaId, tipo, orden, w: 1, h: 1, nombre: tipo + '.png',
+        thumb: 'data:image/png;base64,' + pngB64
+      });
+      tx.oncomplete = () => { db.close(); res(true); };
+      tx.onerror = () => { db.close(); res(false); };
+    };
+    rq.onerror = () => res(false);
+  });
+
+  const idDup = 'RG-53-01-IDA';
+  await ponerFoto(idDup, 'punto', 1);
+  await ponerFoto(idDup, 'placa', 2);
+
+  /* Drive configurado y un script simulado que dice que la ficha ya existe */
+  let DriveUI = null;
+  try { DriveUI = w.eval('Drive'); } catch (e) { DriveUI = null; }
+  log('Drive accesible : ' + (DriveUI && typeof DriveUI.guardarConfig === 'function' ? 'sí' : 'NO'));
+  if (DriveUI && typeof DriveUI.guardarConfig === 'function') await DriveUI.guardarConfig('https://script.google.com/macros/s/AKfycbzPRUEBA123/exec', 'clave');
+  const fetchRealUI = w.fetch;
+  w.fetch = async () => ({
+    ok: true, status: 200,
+    text: async () => JSON.stringify({
+      ok: true, existe: true, copias: 0,
+      existente: { nombre: 'RG-53-01_IDA.pdf', tamano: 1000, actualizado: '2026-11-03 14:22' },
+      autor: { operador: 'Otra Persona', fecha: '2026-11-03' }
+    }),
+    json: async () => ({ ok: true, existe: true })
+  });
+
+  d.getElementById('comboBtn').click();
+  await esperar(250);
+  d.querySelector('.combo-item[data-id="' + idDup + '"]').click();
+  await esperar(300);
+  d.getElementById('btnLevantar').click();
+  await esperar(900);
+  d.getElementById('f-receptor').selectedIndex = 1;
+  d.getElementById('f-altura').value = '1,500';
+  d.querySelector('[data-ahora="inicio"]').click();
+  await esperar(250);
+  const tIni = new Date(d.getElementById('f-inicio').value);
+  tIni.setMinutes(tIni.getMinutes() + 5);
+  const dd = (x) => String(x).padStart(2, '0');
+  d.getElementById('f-fin').value = tIni.getFullYear() + '-' + dd(tIni.getMonth() + 1) + '-' + dd(tIni.getDate()) +
+    'T' + dd(tIni.getHours()) + ':' + dd(tIni.getMinutes());
+  d.getElementById('f-fin').dispatchEvent(new w.Event('change', { bubbles: true }));
+  await esperar(250);
+  d.getElementById('f-operador').value = 'Operador duplicado';
+  d.getElementById('btnGuardar').click();
+  await esperar(2000);            // la subida automática encuentra el duplicado
+
+  const veloDup = d.getElementById('v-aviso');
+  const abierto = veloDup && !veloDup.classList.contains('hidden');
+  log('duplicado avisa : ' + (abierto ? '"' + d.getElementById('avisoTitulo').textContent + '"' : 'NO SALIÓ') +
+      ' · opciones=' + [...d.querySelectorAll('#avisoBotones .btn')].map((b) => b.textContent).join(' / '));
+  log('velo de trabajo: ' + (d.getElementById('busy').classList.contains('hidden') ? 'oculto' : 'SIGUE VISIBLE'));
+  log('aviso autor     : ' + (d.querySelector('#avisoTexto .alerta') ? 'dice que la subió otra persona' : 'no lo dice'));
+
+  /* cancelar: la ficha queda marcada como conflicto y no se sube nada */
+  const cancelar = [...d.querySelectorAll('#avisoBotones .btn')].find((b) => /Cancelar/i.test(b.textContent));
+  if (cancelar) cancelar.click();
+  await esperar(800);
+  const dupFicha = await leerFicha(idDup);
+  log('tras cancelar   : aviso=' + (d.getElementById('v-aviso').classList.contains('hidden') ? 'cerrado' : 'SIGUE') +
+      ' · estado=' + (dupFicha && dupFicha.drive && dupFicha.drive.estado));
+  log('chip conflicto  : ' + (d.querySelector('.combo-item[data-id="' + idDup + '"] .chip-conf') ? 'sí' : 'NO'));
+
+  w.fetch = fetchRealUI;
+  if (DriveUI && typeof DriveUI.guardarConfig === 'function') await DriveUI.guardarConfig('', '');
+  await esperar(300);
+
   const btnCambiar = d.querySelector('[data-cambiar-proyecto]');
   log('botón cambiar   : ' + (btnCambiar ? 'presente' : 'FALTA'));
   if (btnCambiar) {

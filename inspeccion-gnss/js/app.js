@@ -152,6 +152,8 @@ const App = (() => {
   function avisar(o) {
     const velo = $('v-aviso');
     if (!velo) return Promise.resolve('');
+    if ($('busy')) $('busy').classList.add('hidden');   // un aviso no convive con "trabajando…"
+
     $('avisoTitulo').textContent = o.titulo || 'Aviso';
     $('avisoTexto').innerHTML = o.html || '<p>' + esc(o.texto || '') + '</p>';
     const caja = $('avisoBotones');
@@ -845,51 +847,54 @@ const App = (() => {
 
     /* ¿ya hay una ficha de este punto en Drive? (nunca se borra nada sin preguntar) */
     let opc = { siExiste: '', token: '' };
+    let info = null;
     try {
       busy(true, 'Revisando Drive…');
-      const info = await Drive.revisarExistente(f, PR().raizDrive);
-      if (info && info.existe) {
-        const aut = info.autor || {};
-        const cuando = (info.existente && info.existente.actualizado) || aut.fecha || 'fecha desconocida';
-        if (automatico) {
-          f.drive = { estado: 'conflicto', fecha: Date.now(), existente: info.existente, autor: aut };
-          await DB.put('fichas', f); S.fichas.set(id, f);
-          renderTodo(); renderDrive();
-          toast('Ya hay una ficha de este punto en Drive. Ábrela y decide si reemplazarla.', 'err');
-          return;
-        }
-        busy(false);
-        const mio = f.operador ? `La tuya es de <span class="dato">${esc(f.operador)}</span>.` : '';
-        const otro = aut.operador
-          ? (f.operador && aut.operador !== f.operador
-            ? `<p class="alerta">La que ya está en Drive la subió otra persona: ${esc(aut.operador)}.</p>`
-            : `<p>La subió <span class="dato">${esc(aut.operador)}</span>.</p>`)
-          : '<p class="tenue">No se pudo leer quién la subió.</p>';
-        const r = await avisar({
-          titulo: 'Esta ficha ya está en Drive',
-          html: `<p>Ya existe <span class="dato">${esc((info.existente && info.existente.nombre) || '')}</span> ` +
-            `subida el <span class="dato">${esc(cuando)}</span>.</p>` + otro + '<p>' + mio + '</p>' +
-            '<p class="tenue">Si reemplazas, la anterior se guarda en la subcarpeta <b>_anteriores</b>: no se borra.</p>',
-          botones: [
-            { txt: 'Cancelar', clase: '', valor: 'cancelar' },
-            { txt: 'Conservar ambas (COPIA)', clase: '', valor: 'copia' },
-            { txt: 'Reemplazar', clase: 'primary', valor: 'reemplazar' }
-          ]
-        });
-        if (r !== 'copia' && r !== 'reemplazar') return;
-        if (r === 'reemplazar') opc = { siExiste: 'reemplazar', token: '' };
-        else opc = { siExiste: 'copia', token: '_COPIA' + (Number(info.copias || 0) + 1) };
-      }
+      info = await Drive.revisarExistente(f, PR().raizDrive);
     } catch (e) {
-      busy(false);
       if (e && e.code === 'op') {
         /* el script instalado es anterior a la comprobación de duplicados */
         toast('El script de Drive es antiguo: esta ficha se sube sin comprobar duplicados.', 'err');
-        opc = { siExiste: '', token: '' };
       } else {
-        toast('No se pudo revisar Drive: ' + e.message, 'err');
+        toast('No se pudo revisar Drive: ' + (e && e.message), 'err');
         return;
       }
+    } finally {
+      busy(false);                       // pase lo que pase, se quita "Revisando Drive…"
+    }
+
+    if (info && info.existe) {
+      const aut = info.autor || {};
+      const cuando = (info.existente && info.existente.actualizado) || aut.fecha || 'fecha desconocida';
+      const mio = f.operador ? `La tuya es de <span class="dato">${esc(f.operador)}</span>.` : '';
+      const otro = aut.operador
+        ? (f.operador && aut.operador !== f.operador
+          ? `<p class="alerta">La que ya está en Drive la subió otra persona: ${esc(aut.operador)}.</p>`
+          : `<p>La subió <span class="dato">${esc(aut.operador)}</span>.</p>`)
+        : '<p class="tenue">No se pudo leer quién la subió.</p>';
+      const r = await avisar({
+        titulo: 'Esta ficha ya está en Drive',
+        html: `<p>Ya existe <span class="dato">${esc((info.existente && info.existente.nombre) || '')}</span> ` +
+          `subida el <span class="dato">${esc(cuando)}</span>.</p>` + otro + '<p>' + mio + '</p>' +
+          '<p class="tenue">Si reemplazas, la anterior se guarda en la subcarpeta <b>_anteriores</b>: no se borra.</p>',
+        botones: [
+          { txt: 'Cancelar', clase: '', valor: 'cancelar' },
+          { txt: 'Conservar ambas (COPIA)', clase: '', valor: 'copia' },
+          { txt: 'Reemplazar', clase: 'primary', valor: 'reemplazar' }
+        ]
+      });
+      if (r !== 'copia' && r !== 'reemplazar') {
+        /* queda marcada como conflicto para resolverla después, sin perder nada */
+        f.drive = Object.assign({}, f.drive, {
+          estado: 'conflicto', fecha: Date.now(), existente: info.existente, autor: aut
+        });
+        await DB.put('fichas', f); S.fichas.set(id, f);
+        renderTodo(); renderDrive();
+        toast('La ficha quedó marcada con conflicto: no se subió nada.', 'err');
+        return;
+      }
+      if (r === 'reemplazar') opc = { siExiste: 'reemplazar', token: '' };
+      else opc = { siExiste: 'copia', token: '_COPIA' + (Number(info.copias || 0) + 1) };
     }
 
     try {
