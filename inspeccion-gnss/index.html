@@ -49,6 +49,15 @@ addEventListener('unhandledrejection', (e) => {
     </div>
   </section>
 
+<!-- aviso / confirmación (se llena desde app.js) -->
+<section id="v-aviso" class="velo-aviso hidden" role="dialog" aria-modal="true" aria-labelledby="avisoTitulo">
+  <div class="aviso">
+    <h3 id="avisoTitulo">—</h3>
+    <div id="avisoTexto" class="aviso-texto"></div>
+    <div id="avisoBotones" class="row wrap fin"></div>
+  </div>
+</section>
+
 <!-- ===================== 1. PUNTOS ===================== -->
 <section id="v-puntos" class="view">
 

@@ -26,8 +26,9 @@
  *  NOTAS
  *  · No hace falta OAuth ni proyecto de Google Cloud.
  *  · Los archivos quedan a nombre del dueño de este script (una cuenta institucional).
- *  · Si un archivo se sube dos veces con el mismo nombre, el anterior se envía a la
- *    papelera y se crea el nuevo (no se duplica).
+ *  · Si un archivo se sube dos veces con el mismo nombre, NUNCA se borra: según lo que
+ *    pida la app, el anterior se archiva en la subcarpeta "_anteriores" (con fecha y hora)
+ *    o el nuevo se guarda como COPIA1, COPIA2…
  *  · Para comprobar que quedó bien, ejecuta la función `probar` desde el editor.
  * ============================================================================
  */
@@ -68,6 +69,14 @@ function doPost(e) {
     if (!e || !e.postData || !e.postData.contents) return json({ ok: false, error: 'datos' });
     var j = JSON.parse(e.postData.contents);
     if (j.clave !== CLAVE) return json({ ok: false, error: 'clave' });
+
+    /* 1) consulta: ¿ya hay una ficha con ese nombre? (sin subir nada) */
+    if (j.op === 'existe') {
+      var cDia0 = carpetaDe(String(j.dia || hoy().replace(/-/g, '_')), carpetaRaiz(j.raiz));
+      var c0 = carpetaDeFicha(String(j.carpeta || 'sin-codigo'), cDia0);
+      return json(infoExistente(c0, String(j.nombre || '')));
+    }
+
     if (j.op !== 'subir') return json({ ok: false, error: 'op' });
     if (!j.nombre || !j.datos) return json({ ok: false, error: 'datos' });
 
@@ -78,15 +87,46 @@ function doPost(e) {
     var bytes = Utilities.base64Decode(j.datos);
     var blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', j.nombre);
 
-    // Si ya existe un archivo con ese nombre, se manda a la papelera (no se duplica).
-    var reemplazado = false;
-    var it = carpetaFicha.getFilesByName(j.nombre);
-    while (it.hasNext()) { it.next().setTrashed(true); reemplazado = true; }
+    /* Política si el nombre ya existe:
+       · 'reemplazar' → el anterior se archiva en _anteriores/ y entra el nuevo
+       · 'copia'      → el nuevo se guarda como ..._COPIA1, _COPIA2…
+       · sin indicar  → se responde 'existe' y la app decide (nunca se borra nada) */
+    var politica = String(j.siExiste || '');
+    var nombreFinal = String(j.nombre);
+    var archivado = '';
+    var existentes = listaPorNombre(carpetaFicha, nombreFinal);
+
+    if (existentes.length && politica !== 'reemplazar' && politica !== 'copia') {
+      var info = infoExistente(carpetaFicha, nombreFinal);
+      info.ok = false;
+      return json(info);
+    }
+    if (existentes.length && politica === 'reemplazar') {
+      var viejos = carpetaDe('_anteriores', carpetaFicha);
+      for (var k = 0; k < existentes.length; k++) {
+        var viejo = existentes[k];
+        var marca = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'America/Guayaquil', 'yyyyMMdd-HHmmss');
+        var destino = nombreLibre(viejos, quitarExtension(viejo.getName()) + '_' + marca + extension(viejo.getName()));
+        viejos.addFile(viejo.makeCopy(destino));
+        viejo.setTrashed(true);
+        archivado = destino;
+      }
+    }
+    if (existentes.length && politica === 'copia') {
+      var n = 1, libre = '';
+      do {
+        libre = quitarExtension(String(j.nombre)) + '_COPIA' + n + extension(String(j.nombre));
+        n++;
+      } while (listaPorNombre(carpetaFicha, libre).length && n < 100);
+      nombreFinal = libre;
+      blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', nombreFinal);
+    }
 
     var f = carpetaFicha.createFile(blob);
     return json({
       ok: true, id: f.getId(), nombre: f.getName(), bytes: bytes.length,
-      reemplazado: reemplazado, dia: dia.getName(), carpeta: carpetaFicha.getName(), url: f.getUrl()
+      reemplazado: !!archivado, archivado: archivado, copia: nombreFinal !== String(j.nombre),
+      dia: dia.getName(), carpeta: carpetaFicha.getName(), url: f.getUrl()
     });
   } catch (err) {
     return json({ ok: false, error: mensaje(err) });
@@ -130,6 +170,83 @@ function carpetaDeFicha(nombre, dia) {
   var buscar = DriveApp.searchFolders('title = "' + String(nombre).replace(/"/g, '') + '" and trashed = false');
   if (buscar.hasNext()) return buscar.next();
   return dia.createFolder(nombre);
+}
+
+/* Archivos con ese nombre exacto en la carpeta (la búsqueda de Drive no distingue
+   mayúsculas, así que se compara el nombre tal cual). */
+function listaPorNombre(carpeta, nombre) {
+  var out = [], it = carpeta.getFilesByName(nombre);
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.getName() === nombre) out.push(f);
+  }
+  return out;
+}
+
+/* Nombre libre dentro de una carpeta: si ya existe, agrega _2, _3… */
+function nombreLibre(carpeta, nombre) {
+  if (!listaPorNombre(carpeta, nombre).length) return nombre;
+  var base = quitarExtension(nombre), ext = extension(nombre), n = 2;
+  while (listaPorNombre(carpeta, base + '_' + n + ext).length && n < 1000) n++;
+  return base + '_' + n + ext;
+}
+
+function quitarExtension(nombre) {
+  return String(nombre).replace(/\.[a-z0-9]{1,6}$/i, '');
+}
+
+function extension(nombre) {
+  var m = /\.[a-z0-9]{1,6}$/i.exec(String(nombre));
+  return m ? m[0] : '';
+}
+
+/* Datos del archivo que ya existe: cuándo se subió y quién lo hizo (si está el datos.json). */
+function autorDe(carpeta) {
+  var out = { operador: '', fecha: '' };
+  var it = carpeta.getFiles();
+  var candidatos = [];
+  while (it.hasNext()) {
+    var f = it.next();
+    if (/^datos_.*\.json$/i.test(f.getName())) candidatos.push(f);
+  }
+  candidatos.sort(function (a, b) { return b.getLastUpdated().getTime() - a.getLastUpdated().getTime(); });
+  if (!candidatos.length) return out;
+  try {
+    var txt = candidatos[0].getBlob().getDataAsString();
+    var j = JSON.parse(txt);
+    var ficha = (j && j.ficha) || j || {};
+    out.operador = String((ficha && ficha.operador) || '');
+    out.fecha = String((ficha && (ficha.fecha || ficha.inicio)) || '');
+  } catch (err) { /* json ilegible: se devuelve vacío */ }
+  return out;
+}
+
+/* Respuesta estándar cuando hay (o no) un archivo con ese nombre. */
+function infoExistente(carpeta, nombre) {
+  var encontrados = listaPorNombre(carpeta, nombre);
+  var autor = autorDe(carpeta);
+  var primero = encontrados.length ? encontrados[0] : null;
+  /* cuántas copias (_COPIA1, _COPIA2…) hay ya, para que la app elija el número */
+  var copias = 0, base = quitarExtension(nombre), itc = carpeta.getFiles();
+  while (itc.hasNext()) {
+    var fn = itc.next().getName();
+    if (fn.indexOf(base + '_COPIA') === 0) copias++;
+  }
+  return {
+    ok: true,
+    existe: encontrados.length > 0,
+    copias: copias,
+    nombre: nombre,
+    archivos: encontrados.map(function (f) { return f.getName(); }),
+    existente: primero ? {
+      nombre: primero.getName(),
+      tamano: primero.getSize(),
+      actualizado: Utilities.formatDate(primero.getLastUpdated(), Session.getScriptTimeZone() || 'America/Guayaquil', 'yyyy-MM-dd HH:mm')
+    } : null,
+    autor: autor,
+    carpeta: carpeta.getName(),
+    url: carpeta.getUrl()
+  };
 }
 
 function cuenta() {

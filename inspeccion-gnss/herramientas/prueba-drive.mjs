@@ -37,6 +37,14 @@ const server = http.createServer((req, res) => {
     recibidos.push(j);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     if (modo === 'clave') { res.end(JSON.stringify({ ok: false, error: 'clave' })); return; }
+    if (j.op === 'existe') {
+      res.end(JSON.stringify({
+        ok: true, existe: true, copias: 2,
+        existente: { nombre: j.nombre, tamano: 1000, actualizado: '2026-11-03 14:22' },
+        autor: { operador: 'Otro Operador', fecha: '2026-11-03' }
+      }));
+      return;
+    }
     res.end(JSON.stringify({ ok: true, id: 'f' + recibidos.length, nombre: j.nombre, bytes: (j.datos || '').length }));
   });
 });
@@ -134,6 +142,31 @@ globalThis.fetch = fetchReal;
 
 try { Drive.validarUrl('https://ejemplo.com/x'); check(false, 'URL inválida debe fallar'); }
 catch (e) { check(e.code === 'url', 'una URL que no es de Apps Script se rechaza'); }
+
+/* --------- consulta previa: ficha ya existente en Drive --------- */
+const info = await Drive.revisarExistente(ficha, 'Inspección GNSS - Pedro Moncayo');
+check(info.existe === true, 'la consulta previa dice que la ficha ya existe', JSON.stringify(info).slice(0, 80));
+check(info.existe && info.autor && info.autor.operador === 'Otro Operador',
+  'la consulta previa dice quién la subió', info.autor && info.autor.operador);
+check(info.copias === 2, 'la consulta previa cuenta las copias que hay', String(info.copias));
+check(recibidos.some((x) => x.op === 'existe' && x.nombre === 'RG-50-01_IDA.pdf'),
+  'la consulta se hace por el nombre del PDF, sin subir nada');
+
+/* --------- si el script responde 'existe' al subir, el error lo conserva --------- */
+modo = 'ok';
+const fetchPrevio = globalThis.fetch;
+globalThis.fetch = async () => ({
+  ok: true, status: 200,
+  text: async () => JSON.stringify({ ok: false, error: 'existe', existente: { nombre: 'x' } }),
+  json: async () => ({ ok: false, error: 'existe' })
+});
+try {
+  await Drive.subirFicha(ficha, pdf, [], () => {});
+  check(false, 'un conflicto al subir debe fallar');
+} catch (e) {
+  check(e && e.existe && e.existe.existente, 'el conflicto al subir trae los datos del archivo existente');
+}
+globalThis.fetch = fetchPrevio;
 
 server.close();
 console.log(`\nResultado: ${ok} correctas, ${fail} fallidas`);

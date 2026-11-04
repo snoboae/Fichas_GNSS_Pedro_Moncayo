@@ -10,6 +10,17 @@ const log = (m) => { out.textContent += '\n' + m; };
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 const ifr = document.getElementById('app');
 
+/* cierra el diálogo de aviso si está abierto (devuelve su texto) */
+const cerrarAvisoUI = (d) => {
+  const velo = d.getElementById('v-aviso');
+  if (!velo || velo.classList.contains('hidden')) return '';
+  const txt = d.getElementById('avisoTitulo').textContent + ' | ' +
+    [...d.querySelectorAll('#avisoTexto li')].map((li) => li.textContent).join(', ');
+  const b = d.querySelector('#avisoBotones .btn.primary') || d.querySelector('#avisoBotones .btn');
+  if (b) b.click();
+  return txt;
+};
+
 function leerFicha(codigo) {
   return new Promise((res) => {
     const r = indexedDB.open('fichas-gnss');
@@ -109,10 +120,11 @@ function leerFicha(codigo) {
   await esperar(200);
   log('duración         : ' + d.getElementById('f-dur').value);
 
-  w.confirm = () => true;   // aceptar el aviso de campos faltantes
   d.getElementById('f-operador').value = 'Operador de prueba';
   d.getElementById('btnGuardar').click();
   await esperar(1200);
+  log('aviso faltantes  : ' + (cerrarAvisoUI(d) || '(no salió)'));
+  await esperar(300);
   const f = await leerFicha('RG-51-02-IDA');
   log('ficha guardada   : ' + !!f);
   if (f) {
@@ -152,6 +164,60 @@ function leerFicha(codigo) {
   /* ---- cambio a Pruebas Rumiñahui: 3 puntos, nada de Pedro Moncayo ---- */
   d.querySelectorAll('.tabs button').forEach((b) => { if (b.dataset.tab === 'respaldo') b.click(); });
   await esperar(300);
+  /* ---- guardado parcial + confirmación al volver ---- */
+  d.querySelectorAll('.tabs button').forEach((b) => { if (b.dataset.tab === 'puntos') b.click(); });
+  await esperar(300);
+  d.getElementById('comboBtn').click();
+  await esperar(200);
+  const itemParcial = d.querySelector('.combo-item[data-id="RG-52-01-IDA"]');
+  log('item a medias   : ' + (itemParcial ? 'encontrado' : 'NO'));
+  if (itemParcial) {
+    itemParcial.click();
+    await esperar(300);
+    d.getElementById('btnLevantar').click();
+    await esperar(900);
+    const txaObs = d.getElementById('f-obs');
+    if (txaObs) { txaObs.value = 'Ficha a medias para probar'; txaObs.dispatchEvent(new w.Event('input', { bubbles: true })); }
+    d.getElementById('btnGuardar').click();
+    await esperar(1200);
+    const veloAviso = d.getElementById('v-aviso');
+    log('aviso al guardar: ' + (veloAviso && !veloAviso.classList.contains('hidden')
+      ? '"' + d.getElementById('avisoTitulo').textContent + '" · faltan=' + d.querySelectorAll('#avisoTexto li').length
+      : 'NO SALIÓ'));
+    const btnOk = d.querySelector('#avisoBotones .btn.primary');
+    if (btnOk) btnOk.click();
+    await esperar(600);
+    const parcial = await leerFicha('RG-52-01-IDA');
+    log('ficha parcial   : guardada=' + !!parcial + ' · sin receptor=' + (!parcial || !parcial.receptor));
+    const chip = d.querySelector('.combo-item[data-id="RG-52-01-IDA"] .chip-inc');
+    log('chip incompleta : ' + (chip ? 'sí' : 'NO'));
+
+    /* volver con cambios sin guardar */
+    d.getElementById('comboBtn').click();
+    await esperar(200);
+    d.querySelector('.combo-item[data-id="RG-52-01-IDA"]').click();
+    await esperar(300);
+    d.getElementById('btnLevantar').click();
+    await esperar(800);
+    const op = d.getElementById('f-operador');
+    op.value = 'Otro operador';
+    op.dispatchEvent(new w.Event('input', { bubbles: true }));
+    d.getElementById('btnFichaBack').click();
+    await esperar(500);
+    const sigueVelo = !d.getElementById('v-aviso').classList.contains('hidden');
+    log('volver avisa    : ' + sigueVelo + ' · "' + d.getElementById('avisoTitulo').textContent + '"');
+    const seguir = [...d.querySelectorAll('#avisoBotones .btn')].find((b) => /Seguir/i.test(b.textContent));
+    if (seguir) seguir.click();
+    await esperar(400);
+    log('sigue en ficha  : ' + !d.getElementById('v-ficha').classList.contains('hidden'));
+    d.getElementById('btnFichaBack').click();
+    await esperar(400);
+    const salir = [...d.querySelectorAll('#avisoBotones .btn')].find((b) => /Salir/i.test(b.textContent));
+    if (salir) salir.click();
+    await esperar(500);
+    log('sale a puntos   : ' + !d.getElementById('v-puntos').classList.contains('hidden'));
+  }
+
   const btnCambiar = d.querySelector('[data-cambiar-proyecto]');
   log('botón cambiar   : ' + (btnCambiar ? 'presente' : 'FALTA'));
   if (btnCambiar) {

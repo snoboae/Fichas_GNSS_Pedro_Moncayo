@@ -436,3 +436,44 @@ select.sel {
   #brujulaRosa .aguja.s { fill: #355064; }
   #brujulaRosa .eje { fill: #16202a; }
 }
+
+/* ---------- avisos y confirmaciones ---------- */
+.velo-aviso {
+  position: fixed; inset: 0; z-index: 3000; padding: 20px 14px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 26, 46, .55); backdrop-filter: blur(2px);
+}
+.velo-aviso.hidden { display: none; }
+.velo-aviso .aviso {
+  width: 100%; max-width: 430px; background: #fff; border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(9, 26, 46, .38); padding: 18px 18px 14px;
+  animation: avisoEntra .16s ease-out;
+}
+@keyframes avisoEntra { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+.velo-aviso h3 { margin: 0 0 8px; font-size: 16.5px; color: #123a6b; line-height: 1.25; }
+.aviso-texto { font-size: 14px; color: #3b5165; line-height: 1.45; }
+.aviso-texto p { margin: 0 0 8px; }
+.aviso-texto ul { margin: 6px 0 8px; padding-left: 20px; }
+.aviso-texto li { margin: 2px 0; }
+.aviso-texto .dato { font-weight: 700; color: #123a6b; }
+.aviso-texto .alerta { color: #a8471b; font-weight: 600; }
+.aviso-texto .tenue { color: #7d97b3; font-size: 12.5px; }
+#avisoBotones { margin-top: 14px; gap: 8px; }
+#avisoBotones.fin { justify-content: flex-end; }
+#avisoBotones .btn { margin: 0; }
+@media (max-width: 380px) { #avisoBotones .btn { flex: 1 1 100%; } }
+
+/* chips de estado de la ficha en la lista */
+.chip-inc, .chip-conf {
+  display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; border-radius: 999px; padding: 2px 7px; margin-left: 6px;
+  vertical-align: 1px;
+}
+.chip-inc { background: #fdf0d8; color: #8a5a08; }
+.chip-conf { background: #fbe3dd; color: #a8471b; }
+
+/* estado de la ficha en el detalle */
+#d-drive .warn { color: #a8471b; }
+#d-drive .tenue { display: block; margin-top: 4px; color: #7d97b3; font-size: 12.5px; }
+.falta-lista { margin: 6px 0 4px; padding-left: 20px; }
+.falta-lista li { margin: 2px 0; }

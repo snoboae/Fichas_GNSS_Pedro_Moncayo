@@ -146,6 +146,40 @@ La app recuerda el último usado al abrirse (el menú vuelve a salir si se cierr
 Los tres croquis de Rumiñahui salen de la propia monografía y vienen incluidos en la app, igual que
 los 22 de Pedro Moncayo.
 
+### Qué se puede guardar y qué se sube
+
+La ficha **se guarda siempre**, aunque esté a medias: si falta algo, la app avisa con la lista y la
+marca como **incompleta** (chip ámbar en la lista y en el detalle).
+
+**Para subirla a Drive hacen falta estos siete datos** (el resto es opcional):
+
+1. Tipo de antena (campo *Receptor GNSS*)
+2. Altura de la antena
+3. Fecha y hora de **inicio**
+4. Fecha y hora de **fin**
+5. Operador
+6. Fotografía de la medición
+7. Fotografía de la placa
+
+Mientras falte alguno, la subida (automática y manual) no se hace: el botón explica qué falta.
+La copia local (ZIP del día y respaldo `.json`) sí incluye las fichas incompletas, para no perder trabajo.
+
+Al salir de una ficha con cambios sin guardar, la app pregunta antes de descartarlos.
+
+### Si una ficha ya está en Drive
+
+Antes de subir, la app pregunta al script si ese punto ya tiene ficha ese día. Si existe, muestra
+**cuándo se subió y quién la subió** y ofrece tres salidas:
+
+| Opción | Qué hace |
+|---|---|
+| **Cancelar** | No sube nada |
+| **Conservar ambas** | Sube la tuya como `…_COPIA1`, `_COPIA2`… |
+| **Reemplazar** | La anterior se mueve a la subcarpeta **`_anteriores`** del mismo día (con fecha y hora) y entra la nueva |
+
+**Nunca se borra nada.** La subida automática no decide sola: si encuentra un conflicto, deja la ficha
+marcada como **conflicto** y avisa para que alguien lo resuelva a mano.
+
 ### Observaciones (opcional)
 
 Cada ficha tiene un campo **Observaciones** que no es obligatorio: sirve para dejar por escrito lo que

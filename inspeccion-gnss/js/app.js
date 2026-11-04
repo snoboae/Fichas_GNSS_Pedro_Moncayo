@@ -145,6 +145,42 @@ const App = (() => {
     toastT = setTimeout(() => el.classList.add('hidden'), Math.max(2600, Math.min(7000, msg.length * 55)));
     el.classList.remove('hidden');
   }
+  /* ---------------- avisos y confirmaciones ---------------- */
+  let avisoResolver = null;
+
+  /* avisar({titulo, texto|html, botones:[{txt, clase, valor}]}) -> Promise<valor> */
+  function avisar(o) {
+    const velo = $('v-aviso');
+    if (!velo) return Promise.resolve('');
+    $('avisoTitulo').textContent = o.titulo || 'Aviso';
+    $('avisoTexto').innerHTML = o.html || '<p>' + esc(o.texto || '') + '</p>';
+    const caja = $('avisoBotones');
+    caja.innerHTML = '';
+    const botones = o.botones || [{ txt: 'Entendido', clase: 'primary', valor: 'ok' }];
+    return new Promise((resolver) => {
+      avisoResolver = resolver;
+      botones.forEach((b) => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'btn ' + (b.clase || '');
+        el.textContent = b.txt;
+        el.addEventListener('click', () => cerrarAviso(b.valor));
+        caja.appendChild(el);
+      });
+      velo.classList.remove('hidden');
+      const prim = caja.querySelector('.btn.primary') || caja.lastElementChild;
+      if (prim && prim.focus) prim.focus();
+    });
+  }
+
+  function cerrarAviso(valor) {
+    const velo = $('v-aviso');
+    if (velo) velo.classList.add('hidden');
+    const r = avisoResolver;
+    avisoResolver = null;
+    if (r) r(valor == null ? '' : valor);
+  }
+
   function busy(on, msg) {
     $('busy').classList.toggle('hidden', !on);
     if (msg) $('busyMsg').textContent = msg;
@@ -201,10 +237,16 @@ const App = (() => {
       if (!s.plan && !separador) { separador = true; html += '<div class="combo-sep">Sin ruta asignada</div>'; }
       const p = P(s.codigo) || {};
       const ok = s.rol === 'base' ? !!baseDeHoy(s.codigo) : !!miFicha(s.id);
+      const fch = miFicha(s.id);
+      const falta = fch ? FALTANTES.get(s.id) : null;
+      const estado = !fch ? ''
+        : fch.drive && fch.drive.estado === 'conflicto' ? '<span class="chip-conf">conflicto</span>'
+          : fch.drive && fch.drive.estado === 'subida' ? ''
+            : (falta && falta.length ? '<span class="chip-inc">incompleta</span>' : '');
       html += `<button type="button" class="combo-item${ok ? ' saved' : ''}${S.sel && S.sel.id === s.id ? ' sel' : ''}" data-id="${esc(s.id)}" role="option">
         <span class="ck">✓</span>
         <span class="num">${s.n ? s.n : '–'}</span>
-        <span class="txt"><b>${esc(s.codigo)}</b> ${badge(s.tipo, s.dia)}<span class="s">${esc(p.parroquia || '')} · ${s.rol === 'base' ? 'base de primer orden' : esc(p.mat || '')}</span></span>
+        <span class="txt"><b>${esc(s.codigo)}</b> ${badge(s.tipo, s.dia)}${estado}<span class="s">${esc(p.parroquia || '')} · ${s.rol === 'base' ? 'base de primer orden' : esc(p.mat || '')}</span></span>
       </button>`;
     }
     $('comboList').innerHTML = html || '<p class="hint" style="padding:14px">Sin resultados.</p>';
@@ -213,6 +255,12 @@ const App = (() => {
   function renderTodo() {
     renderCombo();
     if (S.sel) { pintarComboVal(); pintarPanelPunto(); }
+    /* recalcula en segundo plano solo lo que falta por calcular, y repinta los chips */
+    const pendientes = fichasProyecto().filter((f) => !FALTANTES.has(f.id)).map((f) => f.id);
+    if (pendientes.length) {
+      Promise.all(pendientes.map((id) => faltantesFicha(miFicha(id)).then((falta) => FALTANTES.set(id, falta))))
+        .then(() => renderCombo()).catch(() => {});
+    }
   }
 
   function seleccionar(id) {
@@ -475,19 +523,8 @@ const App = (() => {
   async function guardarFicha() {
     leerForm();
     const f = S.editor;
-    const faltan = [];
-    if (!f.receptor) faltan.push('receptor GNSS');
-    if (!f.alturaAntena) faltan.push('altura de la antena');
-    else if (f.alturaAntena <= 0 || f.alturaAntena > 10) faltan.push('altura de la antena entre 0 y 10 m');
-    if (!f.inicio) faltan.push('inicio (fecha y hora)');
-    if (!f.fin) faltan.push('fin (fecha y hora)');
-    if (f.inicio && f.fin && duracionMin(f) != null && duracionMin(f) <= 0) faltan.push('fin posterior al inicio');
-    else if (duracionMin(f) > 14 * 60) faltan.push('duración coherente (más de 14 h entre inicio y fin)');
-    if (!f.operador) faltan.push('operador');
-    if (!S.fotosEditor.some((m) => m.tipo === 'punto')) faltan.push('fotografía de la medición');
-    if (!S.fotosEditor.some((m) => m.tipo === 'placa')) faltan.push('fotografía de la placa');
-    if (faltan.length && !confirm('Falta completar:\n· ' + faltan.join('\n· ') + '\n\n¿Guardar la ficha igual?')) return;
-
+    /* la ficha se puede guardar a medias: solo se avisa qué falta para poder subirla */
+    const falta = await faltantesFicha(f);
     f.duracionMin = duracionMin(f);
     const prev = miFicha(f.id);
     f.drive = prev && prev.drive ? prev.drive : { estado: 'pend' };
@@ -506,10 +543,21 @@ const App = (() => {
     S.ajustes.ultimoReceptor = f.receptor || S.ajustes.ultimoReceptor;
     await guardarAjustes();
 
+    S.sucio = false;
+    if (falta.length) FALTANTES.set(f.id, falta); else FALTANTES.delete(f.id);
     renderTodo();
     toast(`Ficha ${TIPOS[f.tipo]} guardada. ✓`, 'ok');
     mostrar('puntos');
-    if (S.ajustes.autoSubir && Drive.configurado()) subirUna(f.id, true);
+    if (!falta.length && S.ajustes.autoSubir && Drive.configurado()) subirUna(f.id, true);
+
+    if (falta.length) {
+      await avisar({
+        titulo: 'Faltan datos obligatorios',
+        html: '<p>La ficha se guardó, pero todavía no se subirá a Drive. Falta:</p>' + textoFaltantes(falta) +
+          '<p>Se subirá a Drive cuando complete esos datos.</p>',
+        botones: [{ txt: 'Entendido', clase: 'primary', valor: 'ok' }]
+      });
+    }
   }
 
   /* ---------------- fotografías ---------------- */
@@ -535,6 +583,8 @@ const App = (() => {
       }
       S.fotosEditor = await Fotos.byFicha(S.editor.id);
       pintarFotosEditor();
+      FALTANTES.delete(S.editor.id);       // las fotos cuentan para los obligatorios
+      renderTodo();
       toast(files.length === 1 ? 'Fotografía agregada.' : `${files.length} fotografías agregadas.`, 'ok');
     } catch (e) {
       toast('No se pudo procesar la foto: ' + e.message, 'err');
@@ -564,6 +614,7 @@ const App = (() => {
     await Fotos.remove(id);
     S.fotosEditor = await Fotos.byFicha(S.editor.id);
     pintarFotosEditor();
+    FALTANTES.delete(S.editor.id);
   }
 
   function verImagen(src) {
@@ -673,11 +724,32 @@ const App = (() => {
     $('d-fotosPanel').classList.toggle('hidden', !metas.length);
 
     const dr = f.drive || { estado: 'pend' };
-    $('d-drive').innerHTML = dr.estado === 'subida'
-      ? `Subida el ${new Date(dr.fecha).toLocaleString('es-EC')}.<br>Carpeta: <code>${esc(dr.ruta || '')}</code>`
-      : dr.estado === 'error'
-        ? `La última subida falló: ${esc(dr.error || '')}`
-        : 'Todavía no se ha subido a Drive.';
+    const faltaAqui = FALTANTES.get(f.id) || [];
+    let estadoDrive;
+    if (faltaAqui.length) {
+      estadoDrive = '<b class="warn">No se puede subir todavía.</b> Falta:<ul class="falta-lista">' +
+        faltaAqui.map((x) => `<li>${esc(x)}</li>`).join('') + '</ul>' +
+        '<span class="tenue">La ficha se guarda igual; se subirá cuando esté completa.</span>';
+    } else if (dr.estado === 'conflicto') {
+      const aut = dr.autor || {};
+      estadoDrive = '<b class="warn">Ya hay una ficha de este punto en Drive.</b> ' +
+        `Subida el ${esc((dr.existente && dr.existente.actualizado) || 'fecha desconocida')}` +
+        (aut.operador ? ` por ${esc(aut.operador)}` : '') +
+        '.<br>Pulsa "Subir esta ficha a Drive" y elige si reemplazarla o conservar ambas.';
+    } else if (dr.estado === 'subida') {
+      estadoDrive = `Subida el ${new Date(dr.fecha).toLocaleString('es-EC')}.<br>Carpeta: <code>${esc(dr.ruta || '')}</code>`;
+    } else if (dr.estado === 'error') {
+      estadoDrive = `La última subida falló: ${esc(dr.error || '')}`;
+    } else {
+      estadoDrive = 'Todavía no se ha subido a Drive.';
+    }
+    $('d-drive').innerHTML = estadoDrive;
+    if (!FALTANTES.has(f.id)) {
+      faltantesFicha(f).then((falta) => {
+        FALTANTES.set(f.id, falta);
+        if (falta.length && S.sel && S.sel.id === f.id) verDetalle(f.id);
+      }).catch(() => {});
+    }
 
     S.miPunto = null;
     $('d-gps').textContent = 'Pulsa "¿A qué distancia estoy?" para medir.';
@@ -716,15 +788,115 @@ const App = (() => {
     return out;
   }
 
+  /* ---- datos obligatorios para que la ficha se suba a Drive ---- */
+  const OBLIGATORIOS = [
+    ['receptor', 'tipo de antena'],
+    ['alturaAntena', 'altura de la antena'],
+    ['inicio', 'fecha y hora de inicio'],
+    ['fin', 'fecha y hora de fin'],
+    ['operador', 'operador']
+  ];
+
+  async function faltantesFicha(f) {
+    const falta = [];
+    OBLIGATORIOS.forEach(([k, txt]) => {
+      if (k === 'alturaAntena') {
+        if (!(Number(f[k]) > 0)) falta.push(txt);
+      } else if (!String(f[k] == null ? '' : f[k]).trim()) {
+        falta.push(txt);
+      }
+    });
+    if (f.inicio && f.fin) {
+      const d = duracionMin(f);
+      if (d != null && d <= 0) falta.push('fin posterior al inicio');
+    }
+    let fotos = [];
+    try { fotos = await Fotos.byFicha(f.id); } catch (e) { fotos = []; }
+    if (!fotos.some((m) => m.tipo === 'punto')) falta.push('fotografía de la medición');
+    if (!fotos.some((m) => m.tipo === 'placa')) falta.push('fotografía de la placa');
+    return falta;
+  }
+
+  /* cache para pintar los chips de la lista sin consultar la base en cada fila */
+  const FALTANTES = new Map();
+
+  const textoFaltantes = (falta) => '<ul>' + falta.map((x) => `<li>${esc(x)}</li>`).join('') + '</ul>';
+
   async function subirUna(id, automatico) {
     const f = miFicha(id);
     if (!f) { toast('Guarda la ficha antes de subirla.', 'err'); return; }
     if (!Drive.configurado()) { toast('Configura la URL y la clave del script en la pestaña Drive.', 'err'); return; }
+    const falta = await faltantesFicha(f);
+    if (falta.length) {
+      FALTANTES.set(f.id, falta);
+      renderTodo();
+      toast('Faltan datos obligatorios: la ficha no se sube todavía.', 'err');
+      if (!automatico) {
+        await avisar({
+          titulo: 'Faltan datos obligatorios',
+          html: '<p>Esta ficha todavía no se puede subir a Drive. Falta:</p>' + textoFaltantes(falta) +
+            '<p class="tenue">Cuando completes esos datos, se subirá sola (si la subida automática está activa).</p>',
+          botones: [{ txt: 'Entendido', clase: 'primary', valor: 'ok' }]
+        });
+      }
+      return;
+    }
+    FALTANTES.delete(f.id);
+
+    /* ¿ya hay una ficha de este punto en Drive? (nunca se borra nada sin preguntar) */
+    let opc = { siExiste: '', token: '' };
+    try {
+      busy(true, 'Revisando Drive…');
+      const info = await Drive.revisarExistente(f, PR().raizDrive);
+      if (info && info.existe) {
+        const aut = info.autor || {};
+        const cuando = (info.existente && info.existente.actualizado) || aut.fecha || 'fecha desconocida';
+        if (automatico) {
+          f.drive = { estado: 'conflicto', fecha: Date.now(), existente: info.existente, autor: aut };
+          await DB.put('fichas', f); S.fichas.set(id, f);
+          renderTodo(); renderDrive();
+          toast('Ya hay una ficha de este punto en Drive. Ábrela y decide si reemplazarla.', 'err');
+          return;
+        }
+        busy(false);
+        const mio = f.operador ? `La tuya es de <span class="dato">${esc(f.operador)}</span>.` : '';
+        const otro = aut.operador
+          ? (f.operador && aut.operador !== f.operador
+            ? `<p class="alerta">La que ya está en Drive la subió otra persona: ${esc(aut.operador)}.</p>`
+            : `<p>La subió <span class="dato">${esc(aut.operador)}</span>.</p>`)
+          : '<p class="tenue">No se pudo leer quién la subió.</p>';
+        const r = await avisar({
+          titulo: 'Esta ficha ya está en Drive',
+          html: `<p>Ya existe <span class="dato">${esc((info.existente && info.existente.nombre) || '')}</span> ` +
+            `subida el <span class="dato">${esc(cuando)}</span>.</p>` + otro + '<p>' + mio + '</p>' +
+            '<p class="tenue">Si reemplazas, la anterior se guarda en la subcarpeta <b>_anteriores</b>: no se borra.</p>',
+          botones: [
+            { txt: 'Cancelar', clase: '', valor: 'cancelar' },
+            { txt: 'Conservar ambas (COPIA)', clase: '', valor: 'copia' },
+            { txt: 'Reemplazar', clase: 'primary', valor: 'reemplazar' }
+          ]
+        });
+        if (r !== 'copia' && r !== 'reemplazar') return;
+        if (r === 'reemplazar') opc = { siExiste: 'reemplazar', token: '' };
+        else opc = { siExiste: 'copia', token: '_COPIA' + (Number(info.copias || 0) + 1) };
+      }
+    } catch (e) {
+      busy(false);
+      if (e && e.code === 'op') {
+        /* el script instalado es anterior a la comprobación de duplicados */
+        toast('El script de Drive es antiguo: esta ficha se sube sin comprobar duplicados.', 'err');
+        opc = { siExiste: '', token: '' };
+      } else {
+        toast('No se pudo revisar Drive: ' + e.message, 'err');
+        return;
+      }
+    }
+
     try {
       busy(true, 'Preparando la subida…');
       const { blob } = await pdfDe(id);
       const fotos = await fotosParaDrive(id);
-      const r = await Drive.subirFicha(f, blob, fotos, (t) => busy(true, t), PR().raizDrive);
+      const r = await Drive.subirFicha(f, blob, fotos, (t) => busy(true, t), PR().raizDrive, opc);
       f.drive = { estado: 'subida', fecha: Date.now(), ruta: r.ruta, archivos: r.archivos, sinConfirmar: !!r.sinConfirmar };
       await DB.put('fichas', f);
       S.fichas.set(id, f);
@@ -750,10 +922,28 @@ const App = (() => {
       .filter((f) => (soloErrores ? f.drive && f.drive.estado === 'error' : !f.drive || f.drive.estado !== 'subida'));
     if (!lista.length) { toast('No hay fichas pendientes de subir.', 'ok'); return; }
     if (!Drive.configurado()) { toast('Configura la URL y la clave del script primero.', 'err'); return; }
-    let ok = 0, err = 0;
+    let ok = 0, err = 0, incompletas = 0, conflictos = 0;
     for (const f of lista) {
+      const falta = await faltantesFicha(f);
+      if (falta.length) { incompletas++; FALTANTES.set(f.id, falta); continue; }
       busy(true, `Subiendo ${f.id} (${ok + err + 1} de ${lista.length})…`);
+      let info = null;
       try {
+        info = await Drive.revisarExistente(f, PR().raizDrive);
+      } catch (eRev) {
+        if (!eRev || eRev.code !== 'op') throw eRev;   // error real: se informa abajo
+        info = null;                                   // script antiguo: se sube igual
+      }
+      try {
+        if (info && info.existe) {
+          /* la subida por lotes no decide sola: se marca y se resuelve a mano */
+          f.drive = { estado: 'conflicto', fecha: Date.now(), existente: info.existente, autor: info.autor };
+          conflictos++;
+          await DB.put('fichas', f);
+          S.fichas.set(f.id, f);
+          renderDrive(); renderTodo();
+          continue;
+        }
         const { blob } = await pdfDe(f.id);
         const fotos = await fotosParaDrive(f.id);
         const r = await Drive.subirFicha(f, blob, fotos, null, PR().raizDrive);
@@ -768,7 +958,11 @@ const App = (() => {
       renderDrive(); renderTodo();
     }
     busy(false);
-    toast(`Subida terminada: ${ok} correcta(s)` + (err ? `, ${err} con error` : '') + '.', err ? 'err' : 'ok');
+    renderTodo();
+    toast(`Subida terminada: ${ok} correcta(s)` + (err ? `, ${err} con error` : '') +
+      (incompletas ? `, ${incompletas} sin subir por datos incompletos` : '') +
+      (conflictos ? `, ${conflictos} ya existían en Drive` : '') + '.',
+    (err || incompletas || conflictos) ? 'err' : 'ok');
   }
 
   function renderDrive() {
@@ -1244,10 +1438,32 @@ const App = (() => {
     });
 
     $('btnFichaBack').addEventListener('click', async () => {
+      if (S.sucio) {
+        const nueva = !miFicha(S.editor && S.editor.id);
+        const r = await avisar({
+          titulo: nueva ? '¿Desea abandonar la creación de la ficha?' : '¿Desea abandonar los cambios?',
+          html: '<p>Hay datos escritos que no se han guardado' +
+            (nueva ? '.' : ' en esta ficha.') + '</p>',
+          botones: [
+            { txt: 'Seguir editando', clase: '', valor: 'seguir' },
+            { txt: 'Salir sin guardar', clase: 'primary', valor: 'salir' }
+          ]
+        });
+        if (r !== 'salir') return;
+      }
+      S.sucio = false;
       await limpiarBorrador();
       mostrar('puntos'); renderTodo();
     });
     $('btnGuardar').addEventListener('click', () => guardarFicha());
+    /* cualquier cambio en el formulario marca la ficha como "sin guardar" */
+    ['input', 'change'].forEach((ev) => {
+      $('v-ficha').addEventListener(ev, (e) => {
+        const t = e.target;
+        if (!t || t.id === 'camPunto' || t.id === 'camPlaca' || t.id === 'camExtra') return;
+        S.sucio = true;
+      }, true);
+    });
     $('f-inicio').addEventListener('change', () => { leerForm(); });
     $('f-fin').addEventListener('change', () => { leerForm(); });
     document.querySelectorAll('[data-ahora]').forEach((b) => b.addEventListener('click', () => ponerAhora(b.dataset.ahora)));
