@@ -184,6 +184,12 @@ IDA_03_11_2026_RG-52-02/
 **Nunca se borra ni se reemplaza nada.** Si dices *Ahora no*, la ficha queda marcada como **conflicto**
 en la lista (chip rojo) para resolverla cuando quieras.
 
+Un detalle que evita líos: iPhone guarda las fotos de la galería como `.jpeg` y las tomadas con la
+cámara como `.jpg`. La app **normaliza** `.jpeg/.jpe/.jfif` a `.jpg`, así el nombre del archivo no
+depende de dónde vino la foto. Y la carpeta de copia la decide el script **una vez por ficha** (no
+archivo por archivo), de modo que el PDF, las dos fotos y el `datos.json` de la copia van siempre
+juntos a `COPIA`, aunque alguna extensión no coincida con la de la ficha anterior.
+
 ### Observaciones (opcional)
 
 Cada ficha tiene un campo **Observaciones** que no es obligatorio: sirve para dejar por escrito lo que

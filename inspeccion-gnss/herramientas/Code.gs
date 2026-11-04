@@ -87,30 +87,31 @@ function doPost(e) {
     var bytes = Utilities.base64Decode(j.datos);
     var blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', j.nombre);
 
-    /* Si ya existe un archivo con ese nombre:
-       · la app pidió 'copia' → todo el juego va a una subcarpeta COPIA / COPIA 1 / COPIA 2…
-       · si no lo pidió          → se responde 'existe' y la app decide (nunca se borra nada) */
+    /* Decisión por PETICIÓN (no por archivo):
+       · siExiste = 'copia' → todo el juego va a la subcarpeta COPIA / COPIA 1 / COPIA 2…
+         (aunque ese archivo en concreto no exista: la extensión puede cambiar, p. ej. .jpeg)
+       · si no            → si el nombre ya existe se responde 'existe' y la app decide */
     var politica = String(j.siExiste || '');
     var carpetaDestino = carpetaFicha;
     var subcarpeta = '';
     var existentes = listaPorNombre(carpetaFicha, String(j.nombre));
 
-    if (existentes.length && politica !== 'copia') {
-      var info = infoExistente(carpetaFicha, String(j.nombre));
-      info.ok = false;
-      return json(info);
-    }
-    if (existentes.length && politica === 'copia') {
-      /* las cuatro piezas de la ficha van juntas a la misma carpeta de copia */
+    if (politica === 'copia') {
       var pedida = String(j.carpetaCopia || '');
-      var nombreCopia = /^COPIA( [0-9]{1,3})?$/.test(pedida) ? pedida : 'COPIA';
-      if (!/^COPIA( [0-9]{1,3})?$/.test(pedida)) nombreCopia = carpetaCopiaLibre(carpetaFicha);
+      var nombreCopia = /^COPIA( [0-9]{1,3})?$/.test(pedida) ? pedida : carpetaCopiaLibre(carpetaFicha);
       carpetaDestino = carpetaDe(nombreCopia, carpetaFicha);
+      /* si dentro de esa copia ya estuviera ese archivo, se pasa a la siguiente carpeta */
       if (listaPorNombre(carpetaDestino, String(j.nombre)).length) {
         carpetaDestino = carpetaDe(carpetaCopiaLibre(carpetaFicha), carpetaFicha);
       }
       subcarpeta = carpetaDestino.getName();
+    } else if (existentes.length) {
+      var info = infoExistente(carpetaFicha, String(j.nombre));
+      info.ok = false;
+      return json(info);
     }
+    /* aviso: si en la carpeta principal hay un archivo con el mismo nombre y otra extensión
+       (.jpg / .jpeg), no se toca: la copia va aparte y nada se sobrescribe. */
 
     var f = carpetaDestino.createFile(blob);
     return json({
@@ -229,9 +230,13 @@ function infoExistente(carpeta, nombre) {
   while (itf.hasNext()) {
     if (/^COPIA( [0-9]{1,3})?$/.test(itf.next().getName())) copias++;
   }
+  /* cuántos archivos hay en la carpeta de la ficha (aunque el nombre no coincida por la extensión) */
+  var total = 0, ita = carpeta.getFiles();
+  while (ita.hasNext()) { ita.next(); total++; }
   return {
     ok: true,
     existe: encontrados.length > 0,
+    archivosTotales: total,
     copias: copias,
     carpetaCopia: carpetaCopiaLibre(carpeta),
     nombre: nombre,

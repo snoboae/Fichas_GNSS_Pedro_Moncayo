@@ -863,6 +863,7 @@ const App = (() => {
       busy(false);                       // pase lo que pase, se quita "Revisando Drive…"
     }
 
+    /* la ficha ya existe si está su PDF: ese nombre no cambia (las fotos sí, .jpg/.jpeg) */
     if (info && info.existe) {
       const aut = info.autor || {};
       const cuando = (info.existente && info.existente.actualizado) || aut.fecha || 'fecha desconocida';

@@ -39,7 +39,7 @@ const server = http.createServer((req, res) => {
     if (modo === 'clave') { res.end(JSON.stringify({ ok: false, error: 'clave' })); return; }
     if (j.op === 'existe') {
       res.end(JSON.stringify({
-        ok: true, existe: true, copias: 1, carpetaCopia: 'COPIA 1',
+        ok: true, existe: true, archivosTotales: 4, copias: 1, carpetaCopia: 'COPIA 1',
         existente: { nombre: j.nombre, tamano: 1000, actualizado: '2026-11-03 14:22' },
         autor: { operador: 'Otro Operador', fecha: '2026-11-03' }
       }));
@@ -182,6 +182,26 @@ try {
   check(e && e.existe && e.existe.existente, 'el conflicto al subir trae los datos del archivo existente');
 }
 globalThis.fetch = fetchPrevio;
+
+/* --------- la extensión de la foto no cambia el nombre del archivo --------- */
+const fotoJPEG = { tipo: 'punto', orden: 1, nombre: 'IMG_0042.jpeg', origTipo: 'image/jpeg', orig: pdf, blob: pdf };
+const fotoJPG = { tipo: 'punto', orden: 1, nombre: 'IMG_0042.JPG', origTipo: 'image/jpeg', orig: pdf, blob: pdf };
+const nExt = recibidos.length;
+await Drive.subirFicha(ficha, pdf, [fotoJPEG], () => {});
+const nombreJPEG = recibidos[nExt + 1].nombre;          // 0 = PDF, 1 = la foto
+const nExt2 = recibidos.length;
+await Drive.subirFicha(ficha, pdf, [fotoJPG], () => {});
+const nombreJPG = recibidos[nExt2 + 1].nombre;
+check(/medicion_1\.jpg$/.test(nombreJPEG), 'una foto .jpeg se sube como .jpg', nombreJPEG);
+check(nombreJPEG === nombreJPG, 'el nombre no depende de la extensión de origen', nombreJPEG + ' vs ' + nombreJPG);
+
+/* --------- con 'copia', TODOS los archivos van a la misma subcarpeta --------- */
+const nCopia = recibidos.length;
+await Drive.subirFicha(ficha, pdf, [fotoJPEG], () => {}, undefined, { siExiste: 'copia', carpetaCopia: 'COPIA 2' });
+const pedidosCopia = recibidos.slice(nCopia);
+check(pedidosCopia.length === 3 && pedidosCopia.every((x) => x.siExiste === 'copia' && x.carpetaCopia === 'COPIA 2'),
+  'con copia, el PDF, la foto y el JSON piden la misma carpeta COPIA 2',
+  JSON.stringify(pedidosCopia.map((x) => x.nombre)));
 
 server.close();
 console.log(`\nResultado: ${ok} correctas, ${fail} fallidas`);

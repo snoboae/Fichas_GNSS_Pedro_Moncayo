@@ -146,9 +146,15 @@ const Drive = (() => {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
 
+  /* Extensiones equivalentes: iPhone guarda .jpeg lo que en Android es .jpg.
+     Se normalizan para que el nombre del archivo no dependa de dónde vino la foto. */
+  const EQUIV = { '.jpeg': '.jpg', '.jpe': '.jpg', '.jfif': '.jpg' };
   const extDe = (nombre, tipo) => {
     const m = /\.([a-z0-9]{2,5})$/i.exec(String(nombre || ''));
-    if (m) return '.' + m[1].toLowerCase();
+    if (m) {
+      const e = '.' + m[1].toLowerCase();
+      return EQUIV[e] || e;
+    }
     const t = String(tipo || '');
     if (/png/.test(t)) return '.png';
     if (/heic|heif/.test(t)) return '.heic';
