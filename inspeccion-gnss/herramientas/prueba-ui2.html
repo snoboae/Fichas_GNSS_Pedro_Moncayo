@@ -10,6 +10,12 @@ const log = (m) => { out.textContent += '\n' + m; };
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 const ifr = document.getElementById('app');
 
+/* texto del botón LEVANTAR / EDITAR */
+const etiquetaBoton = (d) => {
+  const s = d.querySelector('#btnLevantar span:last-child');
+  return s ? s.textContent.replace(/\s+/g, ' ').trim() : '?';
+};
+
 /* cierra el diálogo de aviso si está abierto (devuelve su texto) */
 const cerrarAvisoUI = (d) => {
   const velo = d.getElementById('v-aviso');
@@ -126,6 +132,7 @@ function leerFicha(codigo) {
   log('aviso faltantes  : ' + (cerrarAvisoUI(d) || '(no salió)'));
   await esperar(300);
   const f = await leerFicha('RG-51-02-IDA');
+  log('botón al guardar : ' + etiquetaBoton(d) + ' (esperado EDITAR FICHA)');
   log('ficha guardada   : ' + !!f);
   if (f) {
     log('altura guardada  : ' + JSON.stringify(f.alturaAntena) + ' (tipo ' + typeof f.alturaAntena + ')');
@@ -191,6 +198,15 @@ function leerFicha(codigo) {
     log('ficha parcial   : guardada=' + !!parcial + ' · sin receptor=' + (!parcial || !parcial.receptor));
     const chip = d.querySelector('.combo-item[data-id="RG-52-01-IDA"] .chip-inc');
     log('chip incompleta : ' + (chip ? 'sí' : 'NO'));
+
+    /* borrar esa ficha: el botón debe volver a LEVANTAR sin tocar la lista */
+    d.getElementById('btnVerFicha').click();
+    await esperar(700);
+    d.getElementById('d-del').click();
+    await esperar(900);
+    log('botón al borrar : ' + etiquetaBoton(d) + ' (esperado LEVANTAR FICHA)');
+    const borrada = await leerFicha('RG-52-01-IDA');
+    log('ficha borrada   : ' + (borrada ? 'NO' : 'sí'));
 
     /* volver con cambios sin guardar */
     d.getElementById('comboBtn').click();

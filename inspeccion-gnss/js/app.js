@@ -256,6 +256,7 @@ const App = (() => {
 
   function renderTodo() {
     renderCombo();
+    pintarBotonLevantar();
     if (S.sel) { pintarComboVal(); pintarPanelPunto(); }
     /* recalcula en segundo plano solo lo que falta por calcular, y repinta los chips */
     const pendientes = fichasProyecto().filter((f) => !FALTANTES.has(f.id)).map((f) => f.id);
@@ -263,6 +264,20 @@ const App = (() => {
       Promise.all(pendientes.map((id) => faltantesFicha(miFicha(id)).then((falta) => FALTANTES.set(id, falta))))
         .then(() => renderCombo()).catch(() => {});
     }
+  }
+
+  /* La etiqueta del botón depende de si ese punto ya tiene ficha guardada.
+     Se pinta desde un solo sitio para que se actualice al guardar, al borrar y al cambiar de punto. */
+  function pintarBotonLevantar() {
+    const b = $('btnLevantar');
+    if (!b) return;
+    const span = b.querySelector('span:last-child');
+    if (!span || !span.firstChild) return;
+    if (!S.sel) { span.firstChild.textContent = 'LEVANTAR FICHA'; b.disabled = true; return; }
+    b.disabled = false;
+    const s = S.sel;
+    const tiene = s.rol === 'base' ? !!baseDeHoy(s.codigo) : !!miFicha(s.id);
+    span.firstChild.textContent = tiene ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
   }
 
   function seleccionar(id) {
@@ -273,9 +288,7 @@ const App = (() => {
     $('comboPanel').classList.add('hidden');
     $('comboBtn').setAttribute('aria-expanded', 'false');
     $('btnIr').disabled = false;
-    $('btnLevantar').disabled = false;
-    const tiene = s.rol === 'base' ? !!baseDeHoy(s.codigo) : !!miFicha(id);
-    $('btnLevantar').querySelector('span:last-child').firstChild.textContent = tiene ? 'EDITAR FICHA' : 'LEVANTAR FICHA';
+    pintarBotonLevantar();
     pintarPanelPunto();
     renderCombo();
   }
@@ -1614,8 +1627,8 @@ const App = (() => {
       await DB.clear('fichas'); await DB.clear('photos'); await DB.clear('pmeta'); await DB.clear('croquis');
       S.fichas.clear(); S.sel = null;
       $('panelPunto').classList.add('hidden');
-      $('btnIr').disabled = true; $('btnLevantar').disabled = true;
-      $('btnLevantar').querySelector('span:last-child').firstChild.textContent = 'LEVANTAR FICHA';
+      $('btnIr').disabled = true;
+      pintarBotonLevantar();
       $('comboVal').textContent = 'Elegir un punto…';
       renderTodo(); renderDrive(); estadoApp();
       toast('Datos borrados.', 'ok');
