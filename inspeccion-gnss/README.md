@@ -169,16 +169,20 @@ Al salir de una ficha con cambios sin guardar, la app pregunta antes de descarta
 ### Si una ficha ya está en Drive
 
 Antes de subir, la app pregunta al script si ese punto ya tiene ficha ese día. Si existe, muestra
-**cuándo se subió y quién la subió** y ofrece tres salidas:
+**cuándo se subió y quién la subió** y ofrece una sola decisión: **guardar una copia** (o *Ahora no*).
 
-| Opción | Qué hace |
-|---|---|
-| **Cancelar** | No sube nada |
-| **Conservar ambas** | Sube la tuya como `…_COPIA1`, `_COPIA2`… |
-| **Reemplazar** | La anterior se mueve a la subcarpeta **`_anteriores`** del mismo día (con fecha y hora) y entra la nueva |
+Si aceptas, tu ficha se guarda completa en una **subcarpeta `COPIA`** dentro de la carpeta de esa ficha
+(y si ya hubiera una, en `COPIA 1`, `COPIA 2`…). Así quedan las dos, cada una con su PDF, sus fotos y su
+`datos.json`, sin mezclarse:
 
-**Nunca se borra nada.** La subida automática no decide sola: si encuentra un conflicto, deja la ficha
-marcada como **conflicto** y avisa para que alguien lo resuelva a mano.
+```
+IDA_03_11_2026_RG-52-02/
+    RG-52-02_IDA.pdf  …                    ← la primera
+    COPIA/ RG-52-02_IDA.pdf  …             ← la segunda
+```
+
+**Nunca se borra ni se reemplaza nada.** Si dices *Ahora no*, la ficha queda marcada como **conflicto**
+en la lista (chip rojo) para resolverla cuando quieras.
 
 ### Observaciones (opcional)
 

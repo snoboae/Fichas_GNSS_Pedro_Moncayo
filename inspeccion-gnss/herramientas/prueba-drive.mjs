@@ -39,13 +39,17 @@ const server = http.createServer((req, res) => {
     if (modo === 'clave') { res.end(JSON.stringify({ ok: false, error: 'clave' })); return; }
     if (j.op === 'existe') {
       res.end(JSON.stringify({
-        ok: true, existe: true, copias: 2,
+        ok: true, existe: true, copias: 1, carpetaCopia: 'COPIA 1',
         existente: { nombre: j.nombre, tamano: 1000, actualizado: '2026-11-03 14:22' },
         autor: { operador: 'Otro Operador', fecha: '2026-11-03' }
       }));
       return;
     }
-    res.end(JSON.stringify({ ok: true, id: 'f' + recibidos.length, nombre: j.nombre, bytes: (j.datos || '').length }));
+    res.end(JSON.stringify({
+      ok: true, id: 'f' + recibidos.length, nombre: j.nombre, bytes: (j.datos || '').length,
+      copia: j.siExiste === 'copia',
+      subcarpeta: j.siExiste === 'copia' ? (j.carpetaCopia || 'COPIA') : ''
+    }));
   });
 });
 
@@ -148,9 +152,20 @@ const info = await Drive.revisarExistente(ficha, 'Inspección GNSS - Pedro Monca
 check(info.existe === true, 'la consulta previa dice que la ficha ya existe', JSON.stringify(info).slice(0, 80));
 check(info.existe && info.autor && info.autor.operador === 'Otro Operador',
   'la consulta previa dice quién la subió', info.autor && info.autor.operador);
-check(info.copias === 2, 'la consulta previa cuenta las copias que hay', String(info.copias));
+check(info.copias === 1, 'la consulta previa cuenta las carpetas de copia', String(info.copias));
+check(info.carpetaCopia === 'COPIA 1', 'la consulta previa dice en qué carpeta de copia iría', info.carpetaCopia);
 check(recibidos.some((x) => x.op === 'existe' && x.nombre === 'RG-50-01_IDA.pdf'),
   'la consulta se hace por el nombre del PDF, sin subir nada');
+
+/* --------- subir como copia: misma carpeta + subcarpeta, sin tocar la original --------- */
+modo = 'copia';
+const nAntes = recibidos.length;
+const rCopia = await Drive.subirFicha(ficha, pdf, fotos, () => {}, undefined, { siExiste: 'copia', carpetaCopia: 'COPIA 1' });
+const pedidoCopia = recibidos[nAntes];
+check(pedidoCopia && pedidoCopia.siExiste === 'copia' && pedidoCopia.carpetaCopia === 'COPIA 1',
+  'la subida de copia pide la carpeta COPIA 1', JSON.stringify({ siExiste: pedidoCopia && pedidoCopia.siExiste, c: pedidoCopia && pedidoCopia.carpetaCopia }));
+check(rCopia.ruta.slice(-7) === 'COPIA 1', 'la ruta de la copia termina en la carpeta COPIA 1', rCopia.ruta);
+modo = 'ok';
 
 /* --------- si el script responde 'existe' al subir, el error lo conserva --------- */
 modo = 'ok';

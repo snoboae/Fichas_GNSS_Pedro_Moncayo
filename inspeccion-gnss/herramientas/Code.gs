@@ -26,9 +26,9 @@
  *  NOTAS
  *  · No hace falta OAuth ni proyecto de Google Cloud.
  *  · Los archivos quedan a nombre del dueño de este script (una cuenta institucional).
- *  · Si un archivo se sube dos veces con el mismo nombre, NUNCA se borra: según lo que
- *    pida la app, el anterior se archiva en la subcarpeta "_anteriores" (con fecha y hora)
- *    o el nuevo se guarda como COPIA1, COPIA2…
+ *  · Si la ficha de ese punto ya existe ese día, NUNCA se borra nada: la nueva se guarda
+ *    completa en una subcarpeta COPIA (o "COPIA 1", "COPIA 2"…) dentro de la carpeta de
+ *    la ficha. Quedan las dos, cada una con su PDF, sus fotos y su JSON.
  *  · Para comprobar que quedó bien, ejecuta la función `probar` desde el editor.
  * ============================================================================
  */
@@ -87,45 +87,35 @@ function doPost(e) {
     var bytes = Utilities.base64Decode(j.datos);
     var blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', j.nombre);
 
-    /* Política si el nombre ya existe:
-       · 'reemplazar' → el anterior se archiva en _anteriores/ y entra el nuevo
-       · 'copia'      → el nuevo se guarda como ..._COPIA1, _COPIA2…
-       · sin indicar  → se responde 'existe' y la app decide (nunca se borra nada) */
+    /* Si ya existe un archivo con ese nombre:
+       · la app pidió 'copia' → todo el juego va a una subcarpeta COPIA / COPIA 1 / COPIA 2…
+       · si no lo pidió          → se responde 'existe' y la app decide (nunca se borra nada) */
     var politica = String(j.siExiste || '');
-    var nombreFinal = String(j.nombre);
-    var archivado = '';
-    var existentes = listaPorNombre(carpetaFicha, nombreFinal);
+    var carpetaDestino = carpetaFicha;
+    var subcarpeta = '';
+    var existentes = listaPorNombre(carpetaFicha, String(j.nombre));
 
-    if (existentes.length && politica !== 'reemplazar' && politica !== 'copia') {
-      var info = infoExistente(carpetaFicha, nombreFinal);
+    if (existentes.length && politica !== 'copia') {
+      var info = infoExistente(carpetaFicha, String(j.nombre));
       info.ok = false;
       return json(info);
     }
-    if (existentes.length && politica === 'reemplazar') {
-      var viejos = carpetaDe('_anteriores', carpetaFicha);
-      for (var k = 0; k < existentes.length; k++) {
-        var viejo = existentes[k];
-        var marca = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'America/Guayaquil', 'yyyyMMdd-HHmmss');
-        var destino = nombreLibre(viejos, quitarExtension(viejo.getName()) + '_' + marca + extension(viejo.getName()));
-        viejos.addFile(viejo.makeCopy(destino));
-        viejo.setTrashed(true);
-        archivado = destino;
-      }
-    }
     if (existentes.length && politica === 'copia') {
-      var n = 1, libre = '';
-      do {
-        libre = quitarExtension(String(j.nombre)) + '_COPIA' + n + extension(String(j.nombre));
-        n++;
-      } while (listaPorNombre(carpetaFicha, libre).length && n < 100);
-      nombreFinal = libre;
-      blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', nombreFinal);
+      /* las cuatro piezas de la ficha van juntas a la misma carpeta de copia */
+      var pedida = String(j.carpetaCopia || '');
+      var nombreCopia = /^COPIA( [0-9]{1,3})?$/.test(pedida) ? pedida : 'COPIA';
+      if (!/^COPIA( [0-9]{1,3})?$/.test(pedida)) nombreCopia = carpetaCopiaLibre(carpetaFicha);
+      carpetaDestino = carpetaDe(nombreCopia, carpetaFicha);
+      if (listaPorNombre(carpetaDestino, String(j.nombre)).length) {
+        carpetaDestino = carpetaDe(carpetaCopiaLibre(carpetaFicha), carpetaFicha);
+      }
+      subcarpeta = carpetaDestino.getName();
     }
 
-    var f = carpetaFicha.createFile(blob);
+    var f = carpetaDestino.createFile(blob);
     return json({
       ok: true, id: f.getId(), nombre: f.getName(), bytes: bytes.length,
-      reemplazado: !!archivado, archivado: archivado, copia: nombreFinal !== String(j.nombre),
+      copia: !!subcarpeta, subcarpeta: subcarpeta,
       dia: dia.getName(), carpeta: carpetaFicha.getName(), url: f.getUrl()
     });
   } catch (err) {
@@ -183,6 +173,14 @@ function listaPorNombre(carpeta, nombre) {
   return out;
 }
 
+/* Primera carpeta de copia libre: COPIA, COPIA 1, COPIA 2… */
+function carpetaCopiaLibre(carpeta) {
+  if (!carpeta.getFoldersByName('COPIA').hasNext()) return 'COPIA';
+  var n = 1;
+  while (carpeta.getFoldersByName('COPIA ' + n).hasNext() && n < 1000) n++;
+  return 'COPIA ' + n;
+}
+
 /* Nombre libre dentro de una carpeta: si ya existe, agrega _2, _3… */
 function nombreLibre(carpeta, nombre) {
   if (!listaPorNombre(carpeta, nombre).length) return nombre;
@@ -226,16 +224,16 @@ function infoExistente(carpeta, nombre) {
   var encontrados = listaPorNombre(carpeta, nombre);
   var autor = autorDe(carpeta);
   var primero = encontrados.length ? encontrados[0] : null;
-  /* cuántas copias (_COPIA1, _COPIA2…) hay ya, para que la app elija el número */
-  var copias = 0, base = quitarExtension(nombre), itc = carpeta.getFiles();
-  while (itc.hasNext()) {
-    var fn = itc.next().getName();
-    if (fn.indexOf(base + '_COPIA') === 0) copias++;
+  /* cuántas carpetas de copia hay ya y cuál tocaría */
+  var copias = 0, itf = carpeta.getFolders();
+  while (itf.hasNext()) {
+    if (/^COPIA( [0-9]{1,3})?$/.test(itf.next().getName())) copias++;
   }
   return {
     ok: true,
     existe: encontrados.length > 0,
     copias: copias,
+    carpetaCopia: carpetaCopiaLibre(carpeta),
     nombre: nombre,
     archivos: encontrados.map(function (f) { return f.getName(); }),
     existente: primero ? {

@@ -203,6 +203,7 @@ const Drive = (() => {
       nombre: o.nombre,
       mime: o.mime || 'application/octet-stream',
       siExiste: o.siExiste || '',
+      carpetaCopia: o.carpetaCopia || '',
       datos
     }, o.timeoutMs);
   }
@@ -210,8 +211,8 @@ const Drive = (() => {
   /* ficha: registro; pdfBlob: Blob del PDF; fotos: [{tipo, orden, nombre, orig, blob, origTipo}] */
   async function subirFicha(ficha, pdfBlob, fotos, onPaso, raiz, opciones) {
     const opc = opciones || {};
-    const siExiste = opc.siExiste || '';                 // '' | 'reemplazar' | 'copia'
-    const token = opc.token || '';                       // p. ej. '_COPIA1'
+    const siExiste = opc.siExiste || '';                 // '' | 'copia'
+    const carpetaCopia = opc.carpetaCopia || '';         // 'COPIA' | 'COPIA 1'… (lo decide el script)
     if (!configurado()) throw new ErrorDrive('Falta configurar la URL y la clave del script de Drive.', 'sin_config');
     const paso = (t) => { if (onPaso) onPaso(t); };
     const punto = ficha.codigo;
@@ -223,14 +224,17 @@ const Drive = (() => {
     /* las bases llevan el número de jornada: BASE3_03_11_2026_RG-50-01 */
     const prefijo = etq;
     const carpeta = `${prefijo}_${dd}_${mm}_${aa}_${punto}`;
-    const base = `${punto}_${etq}${token}`;
+    const base = `${punto}_${etq}`;
     const archivos = [];
 
     paso('Ficha PDF…');
     const rPdf = await subirArchivo({
-      raiz, dia, carpeta, punto, nombre: `${base}.pdf`, mime: 'application/pdf', blob: pdfBlob, siExiste
+      raiz, dia, carpeta, punto, nombre: `${base}.pdf`, mime: 'application/pdf', blob: pdfBlob,
+      siExiste, carpetaCopia
     });
     archivos.push(rPdf.nombre || `${base}.pdf`);
+    /* si el script guardó en una carpeta de copia, el resto de archivos va a la misma */
+    const copia = (rPdf && rPdf.subcarpeta) || '';
 
     const lista = fotos || [];
     for (let i = 0; i < lista.length; i++) {
@@ -249,7 +253,7 @@ const Drive = (() => {
       const rFoto = await subirArchivo({
         raiz, dia, carpeta, punto, nombre,
         mime: usarOriginal ? (f.origTipo || mimeDe(ext)) : 'image/jpeg',
-        blob: cuerpo, siExiste
+        blob: cuerpo, siExiste, carpetaCopia: copia || carpetaCopia
       });
       archivos.push(rFoto.nombre || nombre);
     }
@@ -263,13 +267,14 @@ const Drive = (() => {
     const rJson = await subirArchivo({
       raiz, dia, carpeta, punto,
       nombre: `datos_${base}.json`,
-      mime: 'application/json', siExiste,
+      mime: 'application/json', siExiste, carpetaCopia: copia || carpetaCopia,
       blob: new Blob([datos], { type: 'application/json' })
     });
     archivos.push(`datos_${base}.json`);
 
-    const ruta = `${raiz || CONFIG.carpetaProyecto}/${dia}/${carpeta}`;
-    return { ruta, archivos, carpeta, dia, fecha };
+    const sub = copia || '';
+    const ruta = `${raiz || CONFIG.carpetaProyecto}/${dia}/${carpeta}` + (sub ? '/' + sub : '');
+    return { ruta, archivos, carpeta, dia, fecha, subcarpeta: sub };
   }
 
   return {

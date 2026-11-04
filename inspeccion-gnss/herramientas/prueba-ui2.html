@@ -291,7 +291,7 @@ function leerFicha(codigo) {
   log('aviso autor     : ' + (d.querySelector('#avisoTexto .alerta') ? 'dice que la subió otra persona' : 'no lo dice'));
 
   /* cancelar: la ficha queda marcada como conflicto y no se sube nada */
-  const cancelar = [...d.querySelectorAll('#avisoBotones .btn')].find((b) => /Cancelar/i.test(b.textContent));
+  const cancelar = [...d.querySelectorAll('#avisoBotones .btn')].find((b) => /Ahora no|Cancelar/i.test(b.textContent));
   if (cancelar) cancelar.click();
   await esperar(800);
   const dupFicha = await leerFicha(idDup);
