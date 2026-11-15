@@ -798,10 +798,11 @@ const App = (() => {
     if ($('d-obsPanel')) {
       $('d-obsPanel').classList.toggle('hidden', !obs);
       if ($('d-obs')) $('d-obs').textContent = obs;
-      /* en el VA la observación vive en la hoja de Drive: si no llegó, se puede reintentar */
+      /* en el VA la observación vive en la hoja de Drive: el botón está siempre a mano
+         (si alguien borra la fila en la hoja, se vuelve a anotar; la hoja no duplica) */
       const pend = esVA() && !!obs && (!!f.obsPendiente || f.obsEnviada !== obs);
       if ($('d-obsAviso')) $('d-obsAviso').classList.toggle('hidden', !pend);
-      if ($('d-obsAccion')) $('d-obsAccion').classList.toggle('hidden', !pend);
+      if ($('d-obsAccion')) $('d-obsAccion').classList.toggle('hidden', !(esVA() && !!obs));
     }
     $('d-fotosPanel').classList.toggle('hidden', !metas.length);
 
@@ -917,17 +918,17 @@ const App = (() => {
 
   const textoFaltantes = (falta) => '<ul>' + falta.map((x) => `<li>${esc(x)}</li>`).join('') + '</ul>';
 
-  /* Anota la observación del VA en la hoja de Drive. No la repite si el texto no cambió
-     (la hoja también ignora duplicados exactos). Devuelve '' o el aviso de error. */
+  /* Anota la observación del VA en la hoja de Drive. Siempre se lo pregunta al script:
+     es él quien decide si ya está anotada (y no la repite). Así, si alguien borra la fila
+     en la hoja, la próxima subida la vuelve a crear. Devuelve '' o el aviso de error. */
   async function anotarObsDe(f) {
     if (!esVA()) return '';
     const texto = String(f.observaciones || '').trim();
     if (!texto) return '';
-    if (f.obsEnviada === texto) { f.obsPendiente = false; return ''; }
     try {
-      await Drive.anotarObservacion(f, PR().raizDrive);
+      const r = await Drive.anotarObservacion(f, PR().raizDrive);
       f.obsAnotada = true; f.obsPendiente = false; f.obsEnviada = texto;
-      return '';
+      return (r && r.repetida) ? '' : '';
     } catch (e) {
       f.obsPendiente = true;
       return ' (la observación no se pudo anotar: ' + e.message + ')';

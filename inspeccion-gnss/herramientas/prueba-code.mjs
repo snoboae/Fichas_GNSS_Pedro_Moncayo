@@ -232,6 +232,14 @@ r = post({ clave: CLAVE, raiz: VA, op: 'obs', punto: 'VA-50-01', fecha: '2026-11
   operador: 'Operador VA', texto: 'Se volvió a medir con otra antena.' });
 check(r.ok === true && !r.repetida && libro.hojas[0].filas.length === antes + 1, 'una observación nueva sí se agrega');
 
+/* si alguien borra la fila en la hoja, la misma observación se vuelve a anotar */
+libro.hojas[0].filas.length = 1;                    // queda solo la cabecera
+r = post({ clave: CLAVE, raiz: VA, op: 'obs', punto: 'VA-50-01', fecha: '2026-11-16',
+  operador: 'Operador VA', texto: 'Sin novedad, placa visible.' });
+check(r.ok === true && !r.repetida && r.fila === 2, 'tras borrar la fila, la observación se vuelve a anotar', JSON.stringify(r).slice(0, 90));
+check(libro.hojas[0].filas.length === 2 && libro.hojas[0].filas[1][2] === 'Sin novedad, placa visible.',
+  'la hoja recupera el texto borrado', JSON.stringify(libro.hojas[0].filas[1] || null));
+
 /* ---------------- 5) errores y compatibilidad ---------------- */
 r = post({ clave: 'otra', raiz: PETER, nombre: 'x.pdf', datos: PDF });
 check(r.ok === false && r.error === 'clave', 'clave incorrecta se rechaza');
