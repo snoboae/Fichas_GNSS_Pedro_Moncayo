@@ -92,6 +92,14 @@ const App = (() => {
   };
   /* solo las fichas del levantamiento abierto */
   const fichasProyecto = () => Array.from(S.fichas.values()).filter((f) => (f.proyecto || 'pedro') === S.proyecto);
+  /* ¿el levantamiento activo es el de Puntos Vista Atrás? */
+  const esVA = () => PR().id === 'va';
+
+  /* hito del diseño asociado al VA que se está levantando */
+  function hitoDe(f) {
+    return (typeof PUNTO_HITO === 'function' ? PUNTO_HITO(f.codigo) : null);
+  }
+
   const miFicha = (id) => {
     const f = S.fichas.get(id);
     return f && (f.proyecto || 'pedro') === S.proyecto ? f : null;
@@ -248,7 +256,7 @@ const App = (() => {
       html += `<button type="button" class="combo-item${ok ? ' saved' : ''}${S.sel && S.sel.id === s.id ? ' sel' : ''}" data-id="${esc(s.id)}" role="option">
         <span class="ck">✓</span>
         <span class="num">${s.n ? s.n : '–'}</span>
-        <span class="txt"><b>${esc(s.codigo)}</b> ${badge(s.tipo, s.dia)}${estado}<span class="s">${esc(p.parroquia || '')} · ${s.rol === 'base' ? 'base de primer orden' : esc(p.mat || '')}</span></span>
+        <span class="txt"><b>${esc(s.codigo)}</b> ${badge(s.tipo, s.dia)}${estado}<span class="s">${esc(p.parroquia || '')} · ${s.rol === 'base' ? 'base de primer orden' : esc((PR().id === 'va' ? p.nombre : p.mat) || '')}</span></span>
       </button>`;
     }
     $('comboList').innerHTML = html || '<p class="hint" style="padding:14px">Sin resultados.</p>';
@@ -388,6 +396,9 @@ const App = (() => {
       inicio: ahoraLocal(), fin: '', fecha: hoy(),
       operador: S.ajustes.ultimoOperador || '', receptor: S.ajustes.ultimoReceptor || '',
       alturaAntena: '',
+      /* proyecto VA: equipo con que se midió el hito y materialización del VA */
+      matVA: p.matVA || '',
+      hitoReceptor: S.ajustes.ultimoReceptor || '', hitoAltura: '',
       metodo: METODO, mascara: MASCARA, intervalo: INTERVALO,
       creado: Date.now(), actualizado: Date.now()
     };
@@ -432,7 +443,7 @@ const App = (() => {
     if (!f.fin && f.horaFin) f.fin = `${(f.fecha || hoy()).slice(0, 10)}T${f.horaFin}`;
     if (!f.fecha) f.fecha = (f.inicio || '').slice(0, 10) || hoy();
     f.metodo = METODO; f.mascara = MASCARA; f.intervalo = INTERVALO;
-    f.nombre = p.nombre; f.parroquia = p.parroquia; f.sector = p.sector; f.materializacion = p.mat;
+    f.nombre = p.nombre; f.parroquia = p.parroquia; f.sector = p.sector || p.nombre; f.materializacion = p.mat;
     if (!f.tipo) f.tipo = 'ida';
     if (f.sesion === undefined) f.sesion = nRuta(p.c, f.tipo);
     if (!f.grupo) f.grupo = (typeof GRUPOS !== 'undefined' && GRUPOS[f.tipo] ) || GRUPOS.movil;
@@ -447,7 +458,7 @@ const App = (() => {
     $('f-titulo').innerHTML = `Ficha ${esc(f.codigo)} ${badge(f.tipo)}`;
     $('f-codigo').value = f.codigo || '';
     $('f-parroquia').value = f.parroquia || '';
-    $('f-sector').value = f.sector || '';
+    $('f-sector').value = f.sector || f.nombre || '';
     $('f-mat').value = f.materializacion || '';
     $('f-este').value = Number(f.este).toLocaleString('es-EC');
     $('f-norte').value = Number(f.norte).toLocaleString('es-EC');
@@ -461,11 +472,36 @@ const App = (() => {
     $('f-fin').value = f.fin || '';
     $('f-operador').value = f.operador || '';
     if ($('f-obs')) $('f-obs').value = f.observaciones || '';
+    pintarBloqueVA(f);
     pintarCroquis();
     pintarDuracion();
     pintarNotasDiseno();
     pintarOperadores();
     $('btnGuardar').textContent = miFicha(f.id) ? 'Guardar cambios' : 'Guardar ficha';
+  }
+
+  /* Bloque del hito principal y materialización del VA (solo levantamiento VA). */
+  function pintarBloqueVA(f) {
+    const va = esVA();
+    document.querySelectorAll('.solo-va').forEach((el) => el.classList.toggle('hidden', !va));
+    if (!va) return;
+    const h = hitoDe(f) || {};
+    $('f-hito-codigo').value = h.c || '—';
+    $('f-hito-mat').value = h.mat || '—';
+    $('f-hito-este').value = h.e ? Number(h.e).toLocaleString('es-EC') : '—';
+    $('f-hito-norte').value = h.n ? Number(h.n).toLocaleString('es-EC') : '—';
+    $('f-hito-receptor').innerHTML = '<option value="">—</option>' +
+      RECEPTORES.map((r) => `<option${r === f.hitoReceptor ? ' selected' : ''}>${esc(r)}</option>`).join('');
+    $('f-hito-altura').value = f.hitoAltura || '';
+    $('f-matVA').innerHTML = '<option value="">—</option>' +
+      MATERIALIZACIONES.map((r) => `<option${r === f.matVA ? ' selected' : ''}>${esc(r)}</option>`).join('');
+    const hayPan = tienePanorama(f.codigo);
+    if ($('btnVerPanorama')) $('btnVerPanorama').classList.toggle('hidden', !hayPan);
+    if ($('panoramaNota')) $('panoramaNota').classList.toggle('hidden', !hayPan);
+    $('gnssTitulo').textContent = 'Observación GNSS · punto VA';
+    $('lblReceptor').textContent = 'RECEPTOR GNSS (VA)';
+    const aviso = $('f-hito-aviso');
+    if (aviso) aviso.classList.toggle('hidden', !(P(f.codigo) && P(f.codigo).fuente === 'estimado'));
   }
 
   function pintarNotasDiseno() {
@@ -484,6 +520,11 @@ const App = (() => {
     const f = S.editor;
     f.receptor = $('f-receptor').value;
     f.alturaAntena = numero($('f-altura').value);
+    if (esVA()) {
+      f.matVA = $('f-matVA') ? $('f-matVA').value : (f.matVA || '');
+      f.hitoReceptor = $('f-hito-receptor') ? $('f-hito-receptor').value : '';
+      f.hitoAltura = $('f-hito-altura') ? numero($('f-hito-altura').value) : '';
+    }
     f.inicio = $('f-inicio').value;
     f.fin = $('f-fin').value;
     f.fecha = (f.inicio || hoy()).slice(0, 10);
@@ -642,6 +683,10 @@ const App = (() => {
   const croquisMemo = new Map();
   const urlCroquis = (codigo) => `img/croquis/${codigo}.jpg`;
 
+  /* Panorámica del sitio (solo levantamiento VA; no todos los puntos tienen). */
+  const urlPanorama = (codigo) => `img/panoramica/${codigo}.jpg`;
+  const tienePanorama = (codigo) => (typeof VA_SIN_PANORAMA !== 'undefined' ? VA_SIN_PANORAMA.indexOf(codigo) < 0 : false);
+
   async function croquisDe(codigo) {
     if (croquisMemo.has(codigo)) return croquisMemo.get(codigo);
     let r = null;
@@ -701,7 +746,7 @@ const App = (() => {
     $('d-sub').textContent = `${f.parroquia} · ${f.orden}° orden · ${f.materializacion || ''}`;
     const d = duracionMin(f);
     const totalTipo = ((PR() && PR().ruta[f.tipo]) || []).length;
-    $('d-datos').innerHTML = [
+    const filasDet = [
       ['TIPO', `${TIPOS[f.tipo || 'ida']}${f.sesion ? ` (${f.sesion} de ${totalTipo})` : ''}`],
       ['ESTE (X)', Number(f.este).toLocaleString('es-EC')],
       ['NORTE (Y)', Number(f.norte).toLocaleString('es-EC')],
@@ -715,7 +760,25 @@ const App = (() => {
       ['OPERADOR', f.operador || '—'],
       ['SECTOR / SITIO', f.sector || '—'],
       ['ACTUALIZADA', new Date(f.actualizado || f.creado || Date.now()).toLocaleString('es-EC')]
-    ].map(([k, v]) => `<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
+    ];
+    if (esVA()) {
+      const h = hitoDe(f) || {};
+      filasDet.splice(2, 0,
+        ['HITO PRINCIPAL', h.c || '—'],
+        ['VA — MATERIALIZACIÓN', f.matVA || '—'],
+        ['VA — RECEPTOR', f.receptor || '—'],
+        ['VA — ALTURA ANTENA', f.alturaAntena ? f.alturaAntena + ' m' : '—'],
+        ['HITO — RECEPTOR', f.hitoReceptor || '—'],
+        ['HITO — ALTURA ANTENA', f.hitoAltura ? f.hitoAltura + ' m' : '—']
+      );
+      /* el bloque del VA ya se detalla arriba: se quitan las filas repetidas del equipo */
+      const quitar = ['RECEPTOR', 'ALTURA ANTENA'];
+      for (const k of quitar) {
+        const i = filasDet.findIndex((r) => r[0] === k);
+        if (i > 0) filasDet.splice(i, 1);
+      }
+    }
+    $('d-datos').innerHTML = filasDet.map(([k, v]) => `<div><small>${k}</small><b>${esc(v)}</b></div>`).join('');
 
     $('d-croquis').src = urlCroquis(f.codigo);
 
@@ -805,17 +868,25 @@ const App = (() => {
 
   /* ---- datos obligatorios para que la ficha se suba a Drive ---- */
   const OBLIGATORIOS = [
-    ['receptor', 'tipo de antena'],
-    ['alturaAntena', 'altura de la antena'],
+    ['receptor', 'tipo de antena del VA'],
+    ['alturaAntena', 'altura de la antena del VA'],
     ['inicio', 'fecha y hora de inicio'],
     ['fin', 'fecha y hora de fin'],
     ['operador', 'operador']
   ];
 
+  /* En el levantamiento VA se registra también el equipo con que se midió el hito. */
+  const OBLIGATORIOS_VA = [
+    ['matVA', 'materialización del punto VA'],
+    ['hitoReceptor', 'tipo de antena del hito'],
+    ['hitoAltura', 'altura de la antena del hito']
+  ];
+
   async function faltantesFicha(f) {
     const falta = [];
-    OBLIGATORIOS.forEach(([k, txt]) => {
-      if (k === 'alturaAntena') {
+    const lista = OBLIGATORIOS.concat(esVA() ? OBLIGATORIOS_VA : []);
+    lista.forEach(([k, txt]) => {
+      if (k === 'alturaAntena' || k === 'hitoAltura') {
         if (!(Number(f[k]) > 0)) falta.push(txt);
       } else if (!String(f[k] == null ? '' : f[k]).trim()) {
         falta.push(txt);
@@ -923,7 +994,17 @@ const App = (() => {
       }
       renderTodo(); renderDrive();
       if (S.sel && S.sel.id === id && !$('v-detalle').classList.contains('hidden')) verDetalle(id);
-      toast(r.sinConfirmar ? 'Enviado a Drive (no se pudo confirmar la respuesta).' : 'Ficha subida a Drive.', 'ok');
+      /* en el levantamiento VA la observación va a la hoja de Drive, no al PDF */
+      let avisoObs = '';
+      if (esVA() && String(f.observaciones || '').trim()) {
+        try {
+          await Drive.anotarObservacion(f, PR().raizDrive);
+        } catch (eObs) {
+          avisoObs = ' (la observación no se pudo anotar: ' + eObs.message + ')';
+        }
+      }
+      toast((r.sinConfirmar ? 'Enviado a Drive (no se pudo confirmar la respuesta).' : 'Ficha subida a Drive.') + avisoObs,
+        avisoObs ? 'err' : 'ok');
     } catch (e) {
       f.drive = { estado: 'error', fecha: Date.now(), error: e.message };
       await DB.put('fichas', f);
@@ -1484,6 +1565,11 @@ const App = (() => {
     $('f-inicio').addEventListener('change', () => { leerForm(); });
     $('f-fin').addEventListener('change', () => { leerForm(); });
     document.querySelectorAll('[data-ahora]').forEach((b) => b.addEventListener('click', () => ponerAhora(b.dataset.ahora)));
+    $('btnVerPanorama').addEventListener('click', () => {
+      if (!S.editor) return;
+      if (!tienePanorama(S.editor.codigo)) { toast('Este punto no tiene foto de ubicación.', 'err'); return; }
+      verImagen(urlPanorama(S.editor.codigo));
+    });
     $('btnVerCroquis').addEventListener('click', () => S.editor && verImagen(urlCroquis(S.editor.codigo)));
 
     document.querySelectorAll('[data-foto]').forEach((b) => b.addEventListener('click', () => {

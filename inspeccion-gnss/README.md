@@ -146,6 +146,39 @@ La app recuerda el último usado al abrirse (el menú vuelve a salir si se cierr
 Los tres croquis de Rumiñahui salen de la propia monografía y vienen incluidos en la app, igual que
 los 22 de Pedro Moncayo.
 
+## Levantamiento de Puntos Vista Atrás (VA)
+
+Tercer levantamiento de la app: **Levantamiento VA Pedro Moncayo**. Los 22 puntos salen del shapefile
+`Puntos VA` (un VA por hito, con la misma numeración: `RG-50-01` → `VA-50-01`, incluido el `SF`).
+
+- **Coordenada de cada VA**: la del waypoint del GPSMAP 66s (foto del visor) cuando existe; si no hay
+  foto, la del shapefile. En `js/datos.js` cada punto dice de dónde salió (`fuente: foto | shapefile |
+  estimado`). Cuatro puntos usan el shapefile (`VA-50-02`, `VA-52-03`, `VA-54-01`, `VA-54-02`) y
+  `VA-50-02` quedó como **estimado** porque el shapefile traía la coordenada de otro punto (16 km).
+- **Croquis**: `herramientas/genera_croquis_va.py` dibuja la imagen satelital con el **hito (H)** y el
+  **VA (V)**, la línea entre ambos, norte, escala y leyenda. Salida `img/croquis/VA-*.jpg`.
+- **Foto de ubicación**: bajo el croquis, el botón *Ver foto de ubicación* abre la panorámica del sitio
+  (`img/panoramica/VA-*.jpg`, generadas con `herramientas/prepara_panoramicas.py` a partir de las fotos
+  de campo). Los **22 puntos** tienen panorámica; si alguno no la tuviera, se agrega a
+  `VA_SIN_PANORAMA` y el botón se oculta.
+- **Ficha**: la sección 2 se parte en dos bloques, *HITO PRINCIPAL* (coordenadas del diseño,
+  materialización, receptor y altura) y *PUNTO VISTA ATRÁS* (coordenadas medidas, materialización,
+  receptor, altura e **inicio–fin**). Título: “FICHA DE CAMPO · PUNTO VISTA ATRÁS”.
+- **Datos obligatorios** para subir: los dos bloques completos (materialización del VA, receptor y
+  altura del hito y del VA, inicio y fin), operador y las dos fotografías.
+- **Observaciones**: el campo sigue en la app pero **no va en el PDF**; al subir la ficha se anota una
+  fila (PUNTO, FECHA, OBSERVACIÓN, OPERADOR, SUBIDO) en la hoja de cálculo **Observaciones - Vista
+  Atrás** que crea el script en la carpeta del levantamiento.
+- **Drive**: misma cuenta y misma URL de script, pero la raíz es
+  `Inspección GNSS - Pedro Moncayo/VISTA ATRÁS` (el `Code.gs` acepta rutas con `/`).
+
+Para regenerar los croquis:
+
+```
+python herramientas/genera_croquis_va.py            # los 22
+python herramientas/genera_croquis_va.py VA-50-01   # uno
+```
+
 ### Qué se puede guardar y qué se sube
 
 La ficha **se guarda siempre**, aunque esté a medias: si falta algo, la app avisa con la lista y la

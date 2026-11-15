@@ -161,12 +161,29 @@ addEventListener('unhandledrejection', (e) => {
     <p class="hint" id="f-trabajos"></p>
   </div>
 
+  <div class="panel solo-va hidden" id="panelHito">
+    <h2>Hito principal</h2>
+    <p class="hint">El punto vista atrás se amarra a este hito, ya monumentado en la campaña anterior.
+      Aquí se registra con qué equipo se volvió a medir.</p>
+    <div class="form">
+      <label class="fld"><span>HITO PRINCIPAL 🔒</span><input id="f-hito-codigo" readonly></label>
+      <label class="fld"><span>MATERIALIZACIÓN DEL HITO 🔒</span><input id="f-hito-mat" readonly></label>
+      <label class="fld"><span>RECEPTOR GNSS (HITO)</span><select id="f-hito-receptor"></select></label>
+      <label class="fld"><span>ALTURA DE LA ANTENA · HITO (m)</span><input id="f-hito-altura" type="text" inputmode="decimal" autocomplete="off" placeholder="Ej. 1,532 o 1.532"></label>
+      <label class="fld"><span>COORDENADA X · HITO 🔒</span><input id="f-hito-este" readonly></label>
+      <label class="fld"><span>COORDENADA Y · HITO 🔒</span><input id="f-hito-norte" readonly></label>
+    </div>
+    <p class="hint warn hidden" id="f-hito-aviso">La coordenada de este punto vista atrás es una
+      <b>estimación del diseño</b>: confírmala con el GPS antes de usarla para navegar.</p>
+  </div>
+
   <div class="panel">
-    <h2>Observación GNSS</h2>
+    <h2 id="gnssTitulo">Observación GNSS</h2>
     <p class="hint">Método y parámetros que fija el TR (no se editan):
       <b>estático diferencial · máscara 10° · intervalo 1 s</b>.</p>
     <div class="form">
-      <label class="fld"><span>RECEPTOR GNSS</span><select id="f-receptor"></select></label>
+      <label class="fld solo-va hidden"><span>MATERIALIZACIÓN DEL VA</span><select id="f-matVA"></select></label>
+      <label class="fld"><span id="lblReceptor">RECEPTOR GNSS</span><select id="f-receptor"></select></label>
       <label class="fld"><span>ALTURA DE LA ANTENA (m)</span><input id="f-altura" type="text" inputmode="decimal" autocomplete="off" placeholder="Ej. 1,532 o 1.532"></label>
 
       <div class="fld">
@@ -198,7 +215,9 @@ addEventListener('unhandledrejection', (e) => {
     </div>
     <div class="row wrap">
       <button class="btn small" id="btnVerCroquis">Ampliar</button>
+      <button class="btn small solo-va hidden" id="btnVerPanorama">Ver foto de ubicación</button>
     </div>
+    <p class="hint solo-va hidden" id="panoramaNota">Panorámica del sitio tomada en campo, para reconocer el punto.</p>
   </div>
 
   <div class="panel">

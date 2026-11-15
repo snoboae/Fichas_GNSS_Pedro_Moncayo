@@ -31,9 +31,11 @@ const arg = process.argv[2] || 'RG-50-01';
 const minimo = arg === '--minimo';
 const sinFotos = minimo || process.argv.includes('--sinfotos');
 const rumi = process.argv.includes('--rumi');
+const va = process.argv.includes('--va');
 const sinObs = process.argv.includes('--sinobs');
 if (rumi && typeof PROYECTO_RUMI !== 'undefined') PROYECTO_ACTIVO = PROYECTO_RUMI;
-const LISTA = rumi ? PUNTOS_RUMI : PUNTOS;
+if (va && typeof PROYECTO_VA !== 'undefined') PROYECTO_ACTIVO = PROYECTO_VA;
+const LISTA = va ? PUNTOS_VA : rumi ? PUNTOS_RUMI : PUNTOS;
 const p = minimo ? LISTA[0] : (LISTA.find((x) => x.c === arg) || LISTA[0]);
 const { lat, lon } = Geo.puntoLatLon(p);
 
@@ -42,14 +44,20 @@ const incluido = path.join(raiz, 'img', 'croquis', p.c + '.jpg');
 const archivoCroquis = fs.existsSync(incluido) ? incluido : (fs.existsSync(real) ? real : path.join(demo, 'croquis.jpg'));
 const croquis = { dataUrl: b64(archivoCroquis) };
 
+const hitoVA = va && typeof PUNTO_HITO === 'function' ? PUNTO_HITO(p.c) : null;
 const ficha = {
-  id: p.c, codigo: p.c, nombre: p.nombre, parroquia: p.parroquia, sector: p.sector,
-  este: p.e, norte: p.n, orden: p.orden, materializacion: p.mat, lat, lon,
+  id: p.c, codigo: p.c, nombre: p.nombre, parroquia: p.parroquia, sector: p.nombre,
+  este: p.e, norte: p.n, orden: p.orden, materializacion: (hitoVA ? hitoVA.mat : p.mat), lat, lon,
+  ...(va ? {
+    proyecto: 'va', matVA: p.matVA || 'Placa 5 cm',
+    hitoReceptor: 'Gintec G40 Plus', hitoAltura: 1.605, hito: p.hito,
+    tipo: 'unica', sesion: null, grupo: 'VISTA ATRÁS'
+  } : {}),
   inicio: '2026-10-31T09:15', fin: '2026-10-31T10:05', fecha: '2026-10-31',
   operador: 'Saúl Chicaiza', receptor: 'Hi-Target V90', alturaAntena: 1.532,
   observaciones: 'Se socializó con el presidente del barrio; el hito está en buen estado y sin obstrucciones. Se dejó constancia con la comunidad.',
   metodo: 'Estático diferencial', mascara: 10, intervalo: 1, duracionMin: 50,
-  tipo: process.argv.includes('--base') ? 'base' : process.argv.includes('--vuelta') ? 'vuelta' : 'ida',
+  tipo: va ? 'unica' : process.argv.includes('--base') ? 'base' : process.argv.includes('--vuelta') ? 'vuelta' : 'ida',
   dia: process.argv.includes('--base') ? Number((process.argv.find((a) => /^--dia=/.test(a)) || '--dia=3').split('=')[1]) : null,
   sesion: process.argv.includes('--vuelta') ? 3 : 1,
   grupo: process.argv.includes('--base') ? '1. PRIMER ORDEN' : '2. SEGUNDO Y TERCER ORDEN',

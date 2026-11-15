@@ -1,7 +1,7 @@
 /* Service worker: la app abre y funciona sin conexión.
    - Archivos de la app: caché con actualización en segundo plano.
    - Teselas del mapa satelital: caché con límite (las que ya se vieron o generaron). */
-const VERSION = 'vfc88a2bc';
+const VERSION = 'v043ffef3';
 const APP_CACHE = 'ig-app-' + VERSION;
 const TILE_CACHE = 'ig-tiles-v1';
 const MAX_TILES = 3000;
@@ -26,7 +26,8 @@ const APP_FILES = [
   'js/brujula.js',
   'js/app.js',
   'lib/jspdf/jspdf.umd.min.js',
-  // croquis de los 22 puntos, generados con herramientas/genera_croquis.py
+  // croquis de los 22 puntos (genera_croquis.py), de los 22 VA (genera_croquis_va.py)
+// y las panorámicas de los VA (prepara_panoramicas.py)
   'img/croquis/RG-50-01.jpg',
   'img/croquis/RG-50-02.jpg',
   'img/croquis/RG-50-03.jpg',
@@ -49,6 +50,50 @@ const APP_FILES = [
   'img/croquis/RG-54-03.jpg',
   'img/croquis/RG-54-04.jpg',
   'img/croquis/RG-SF-51-01.jpg',
+  'img/croquis/VA-50-01.jpg',
+  'img/croquis/VA-50-02.jpg',
+  'img/croquis/VA-50-03.jpg',
+  'img/croquis/VA-50-04.jpg',
+  'img/croquis/VA-50-05.jpg',
+  'img/croquis/VA-50-06.jpg',
+  'img/croquis/VA-51-01.jpg',
+  'img/croquis/VA-51-02.jpg',
+  'img/croquis/VA-51-03.jpg',
+  'img/croquis/VA-52-01.jpg',
+  'img/croquis/VA-52-02.jpg',
+  'img/croquis/VA-52-03.jpg',
+  'img/croquis/VA-52-04.jpg',
+  'img/croquis/VA-53-01.jpg',
+  'img/croquis/VA-53-02.jpg',
+  'img/croquis/VA-53-03.jpg',
+  'img/croquis/VA-53-04.jpg',
+  'img/croquis/VA-54-01.jpg',
+  'img/croquis/VA-54-02.jpg',
+  'img/croquis/VA-54-03.jpg',
+  'img/croquis/VA-54-04.jpg',
+  'img/croquis/VA-SF-51-01.jpg',
+  'img/panoramica/VA-50-02.jpg',
+  'img/panoramica/VA-50-03.jpg',
+  'img/panoramica/VA-50-04.jpg',
+  'img/panoramica/VA-50-05.jpg',
+  'img/panoramica/VA-50-06.jpg',
+  'img/panoramica/VA-51-01.jpg',
+  'img/panoramica/VA-51-02.jpg',
+  'img/panoramica/VA-51-03.jpg',
+  'img/panoramica/VA-52-01.jpg',
+  'img/panoramica/VA-52-02.jpg',
+  'img/panoramica/VA-52-03.jpg',
+  'img/panoramica/VA-52-04.jpg',
+  'img/panoramica/VA-53-01.jpg',
+  'img/panoramica/VA-53-02.jpg',
+  'img/panoramica/VA-53-03.jpg',
+  'img/panoramica/VA-53-04.jpg',
+  'img/panoramica/VA-54-01.jpg',
+  'img/panoramica/VA-54-03.jpg',
+  'img/panoramica/VA-54-04.jpg',
+  'img/panoramica/VA-SF-51-01.jpg',
+  'img/panoramica/VA-50-01.jpg',
+  'img/panoramica/VA-54-02.jpg',
   'img/croquis/PCA01.jpg',
   'img/croquis/PCA03.jpg',
   'img/croquis/PCA04.jpg',

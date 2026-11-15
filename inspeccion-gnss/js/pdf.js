@@ -165,7 +165,7 @@ const PDF = (() => {
     const by = 18.6, bh = 9.4;
     doc.setFillColor(...NAVY); doc.rect(M, by, CW, bh, 'F');
     doc.setFillColor(...GREEN); doc.rect(M, by + bh, CW, 0.9, 'F');
-    txt(doc, 'FICHA DE CAMPO · PUNTO DE CONTROL GEODÉSICO', M + 4, by + 6.3, { size: 11.2, bold: true, color: [255, 255, 255] });
+    txt(doc, 'FICHA DE CAMPO · ' + tituloFicha(), M + 4, by + 6.3, { size: 11.2, bold: true, color: [255, 255, 255] });
 
     /* placa del código: con alto suficiente para que el código no toque el borde */
     const pw = 46, px = PW - M - pw, py = by + 1.2, ph = bh - 2.4;
@@ -192,6 +192,9 @@ const PDF = (() => {
     return 29.9;
   }
 
+  const esVA = () => PROY().id === 'va';
+  const tituloFicha = () => PROY().tituloFicha || 'PUNTO DE CONTROL GEODÉSICO';
+
   /* ---------------- 1. identificación ---------------- */
   function identificacion(doc, f, y) {
     seccion(doc, '1', 'Identificación del punto', y);
@@ -203,12 +206,20 @@ const PDF = (() => {
     const t2 = t + h;
     celda(doc, M, t2, cw, h, 'PROVINCIA', PROY().provincia);
     celda(doc, M + cw, t2, cw, h, 'CANTÓN', PROY().canton);
+    if (esVA()) {
+      const hito = (typeof PUNTO_HITO === 'function' ? PUNTO_HITO(f.codigo) : null);
+      const codHito = hito ? hito.c : (f.hito || '—');
+      celda(doc, M + cw * 2, t2, cw * 2, h, 'SECTOR / SITIO', f.sector);
+      celda(doc, M + cw * 4, t2, cw * 2, h, 'HITO PRINCIPAL', codHito, { bold: true });
+      return t2 + h;
+    }
     celda(doc, M + cw * 2, t2, cw * 4, h, 'SECTOR / SITIO', f.sector);
     return t2 + h;
   }
 
   /* ---------------- 2. coordenadas, materialización y equipo ---------------- */
   function coordenadas(doc, f, y) {
+    if (esVA()) return coordenadasVA(doc, f, y);
     seccion(doc, '2', 'Ubicación, materialización y observación', y);
     const t = y + 6.6, h = 7.2;
     const wA = 106, wB = CW - 106;
@@ -243,6 +254,54 @@ const PDF = (() => {
     return r0 + 4 * h;
   }
 
+  /* ---------------- 2 bis. hito principal + punto vista atrás ---------------- */
+  function coordenadasVA(doc, f, y) {
+    seccion(doc, '2', 'Hito principal y punto vista atrás', y);
+    const t = y + 6.6, h = 7.2, gap = 5;
+    const hito = (typeof PUNTO_HITO === 'function' ? PUNTO_HITO(f.codigo) : null) || {};
+    const wB = (CW - gap) / 2, xA = M, xB = M + wB + gap;
+    const metodo = `${PROY().zona}${PROY().hemisferio} — WGS84 · estático diferencial · máscara ${f.mascara || 10}° · ${f.intervalo || 1} s`;
+
+    const cabecera = (x, w, titulo, sub, color) => {
+      doc.setFillColor(...color);
+      doc.rect(x, t, w, 5.2, 'F');
+      txt(doc, titulo, x + 1.8, t + 3.4, { size: 6.4, bold: true, color: [255, 255, 255] });
+      txt(doc, sub, x + w - 1.8, t + 3.4, { size: 5.6, color: [232, 240, 248], align: 'right' });
+    };
+    cabecera(xA, wB, 'HITO PRINCIPAL', metodo, NAVY);
+    cabecera(xB, wB, 'PUNTO VISTA ATRÁS', metodo, [16, 100, 74]);
+
+    const r0 = t + 5.2;
+    const mit = wB / 2;
+    /* --- hito --- */
+    celda(doc, xA, r0, mit, h, 'ESTE — X (m)', miles(hito.e));
+    celda(doc, xA + mit, r0, mit, h, 'NORTE — Y (m)', miles(hito.n));
+    celda(doc, xA, r0 + h, wB, h, 'MATERIALIZACIÓN', f.materializacion || hito.mat);
+    celda(doc, xA, r0 + 2 * h, wB, h, 'RECEPTOR GNSS', f.hitoReceptor);
+    celda(doc, xA, r0 + 3 * h, wB, h, 'ALTURA DE LA ANTENA (m)', f.hitoAltura ? dec(f.hitoAltura, 3) : '—');
+
+    /* --- VA --- */
+    const mismoDia = String(f.inicio || '').slice(0, 10) === String(f.fin || '').slice(0, 10);
+    const finTxt = f.fin ? (mismoDia ? fmtHora(f.fin) : fmtFechaHora(f.fin)) : '—';
+    const obs = (f.inicio || f.fin)
+      ? `${fmtFechaHora(f.inicio)}  a  ${finTxt}${f.duracionMin ? `  (${f.duracionMin} min)` : ''}`
+      : '—';
+    celda(doc, xB, r0, mit, h, 'ESTE — X (m)', miles(f.este));
+    celda(doc, xB + mit, r0, mit, h, 'NORTE — Y (m)', miles(f.norte));
+    celda(doc, xB, r0 + h, wB, h, 'MATERIALIZACIÓN', f.matVA);
+    celda(doc, xB, r0 + 2 * h, wB, h, 'RECEPTOR GNSS', f.receptor);
+    celda(doc, xB, r0 + 3 * h, wB, h, 'ALTURA DE LA ANTENA (m)', f.alturaAntena ? dec(f.alturaAntena, 3) : '—');
+    celda(doc, xB, r0 + 4 * h, wB, h, 'INICIO – FIN DE LA OBSERVACIÓN', obs);
+
+    /* línea rápida de cierre del bloque del hito */
+    const yf = r0 + 4 * h;
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.18);
+    doc.line(xA, yf, xA + wB, yf);
+    txt(doc, 'El hito se midió en la campaña anterior; aquí solo se registra el equipo con que se volvió a observar.',
+      xA + 1.8, yf + 4.2, { size: 5.4, color: GRAY, italic: true });
+    return yf + h;
+  }
+
   /* ---------------- documento ---------------- */
   function fichaDoc(f, fotos, croquis) {
     const doc = nuevo();
@@ -254,7 +313,7 @@ const PDF = (() => {
 
     // ---------- 3. croquis (izquierda) + 4. fotografías (derecha) ----------
     const ySec = y, yImg = ySec + 6.2;
-    const obsPdf = String(f.observaciones || '').trim();
+    const obsPdf = (PROY().observacionesEnPDF === false) ? '' : String(f.observaciones || '').trim();
     const altoObs = obsPdf ? 19 : 0;         // franja reservada para las observaciones
     const yFinImgs = BOTTOM - altoObs;
     const hImg = yFinImgs - yImg;
@@ -277,9 +336,14 @@ const PDF = (() => {
 
     // nota al pie de las fotografías (ocupa el espacio libre de la columna)
     const yNota = yImg + hF + 6.4;
-    const nota = 'Registro de campo de la observación GNSS. Las coordenadas X/Y corresponden al diseño de la red ' +
-      `geodésica cantonal (WGS84, UTM ${PROY().zona} ${PROY().hemisferio}) y no sustituyen la monografía ` +
-      'definitiva del punto.' + (nExtra ? ` Se archivaron ${nExtra} foto(s) adicional(es) en Google Drive.` : '');
+    const nota = esVA()
+      ? 'Registro de campo del punto vista atrás y su hito principal. Las coordenadas del VA corresponden a lo ' +
+        `medido en campo (WGS84, UTM ${PROY().zona} ${PROY().hemisferio}); las del hito, al diseño de la red. ` +
+        'Las observaciones se registran en la hoja de Drive, no en esta ficha.' +
+        (nExtra ? ` Se archivaron ${nExtra} foto(s) adicional(es) en Google Drive.` : '')
+      : 'Registro de campo de la observación GNSS. Las coordenadas X/Y corresponden al diseño de la red ' +
+        `geodésica cantonal (WGS84, UTM ${PROY().zona} ${PROY().hemisferio}) y no sustituyen la monografía ` +
+        'definitiva del punto.' + (nExtra ? ` Se archivaron ${nExtra} foto(s) adicional(es) en Google Drive.` : '');
     const cabe = Math.max(1, Math.floor((yFinImgs - yNota) / 2.45));
     const ln = recortar(lineas(doc, nota, wR - 2, 6.1, 'italic'), cabe);
     txt(doc, ln, xR, yNota + 2.4, { size: 6.1, color: GRAY, italic: true, lh: 1.02 });

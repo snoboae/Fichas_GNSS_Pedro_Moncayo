@@ -283,8 +283,23 @@ const Drive = (() => {
     return { ruta, archivos, carpeta, dia, fecha, subcarpeta: sub };
   }
 
+  /* Anota la observación de una ficha en la hoja de cálculo del levantamiento.
+     Solo se envía si hay texto. */
+  async function anotarObservacion(ficha, raiz) {
+    const texto = String((ficha && ficha.observaciones) || '').trim();
+    if (!texto) return { ok: true, fila: 0 };
+    return enviar({
+      op: 'obs',
+      raiz: raiz || CONFIG.carpetaProyecto,
+      punto: String(ficha.codigo || ''),
+      fecha: String(ficha.fecha || hoyISO()),
+      operador: String(ficha.operador || ''),
+      texto: texto
+    }, 30000);
+  }
+
   return {
     init, configurado, urlActual, claveActual, guardarConfig, validarUrl,
-    probar, revisarExistente, subirFicha, subirArchivo, aBase64, hoyISO, ErrorDrive
+    probar, revisarExistente, anotarObservacion, subirFicha, subirArchivo, aBase64, hoyISO, ErrorDrive
   };
 })();

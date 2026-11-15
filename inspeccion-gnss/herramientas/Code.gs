@@ -66,6 +66,13 @@ function doGet(e) {
 /** POST: sube un archivo. */
 function doPost(e) {
   try {
+    var j0 = JSON.parse(e.postData.contents);
+    if (String(j0.clave || '') !== CLAVE) return json({ ok: false, error: 'clave' });
+    /* observaciones: se anotan en la hoja de cálculo del levantamiento */
+    if (String(j0.op || '') === 'obs') return anotarObservacion(j0);
+  } catch (err) { /* si no se pudo leer, sigue el flujo normal */ }
+
+  try {
     if (!e || !e.postData || !e.postData.contents) return json({ ok: false, error: 'datos' });
     var j = JSON.parse(e.postData.contents);
     if (j.clave !== CLAVE) return json({ ok: false, error: 'clave' });
@@ -108,6 +115,7 @@ function doPost(e) {
     } else if (existentes.length) {
       var info = infoExistente(carpetaFicha, String(j.nombre));
       info.ok = false;
+      info.error = 'existe';     // así la app reconoce el conflicto y ofrece guardar la copia
       return json(info);
     }
     /* aviso: si en la carpeta principal hay un archivo con el mismo nombre y otra extensión
@@ -124,16 +132,71 @@ function doPost(e) {
   }
 }
 
+/* Hoja de observaciones del levantamiento: una fila por observación.
+   Columnas: PUNTO · FECHA · OBSERVACIÓN · OPERADOR · SUBIDO. */
+var HOJA_OBS = 'Observaciones - Vista Atrás';
+var HOJA_PESTANA = 'Observaciones';
+
+function hojaObservaciones(raiz) {
+  var it = raiz.getFilesByName(HOJA_OBS);
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.getMimeType() === MimeType.GOOGLE_SHEETS) return SpreadsheetApp.openById(f.getId());
+  }
+  var ss = SpreadsheetApp.create(HOJA_OBS);
+  var hoja = ss.getSheets()[0];
+  hoja.setName(HOJA_PESTANA);
+  hoja.appendRow(['PUNTO', 'FECHA', 'OBSERVACIÓN', 'OPERADOR', 'SUBIDO']);
+  hoja.getRange(1, 1, 1, 5).setFontWeight('bold').setBackground('#123a6b').setFontColor('#ffffff');
+  hoja.setFrozenRows(1);
+  hoja.setColumnWidth(1, 120); hoja.setColumnWidth(2, 110);
+  hoja.setColumnWidth(3, 460); hoja.setColumnWidth(4, 170); hoja.setColumnWidth(5, 150);
+  /* el archivo se mueve a la carpeta del levantamiento (create() lo deja en Mi unidad) */
+  var archivo = DriveApp.getFileById(ss.getId());
+  raiz.addFile(archivo);
+  DriveApp.getRootFolder().removeFile(archivo);
+  return ss;
+}
+
+/* Agrega una fila con la observación de un punto. */
+function anotarObservacion(j) {
+  var texto = String(j.texto || '').trim();
+  if (!texto) return json({ ok: true, fila: 0, nota: 'sin observación' });
+  var raiz = carpetaRaiz(j.raiz);
+  var ss = hojaObservaciones(raiz);
+  var hoja = ss.getSheetByName(HOJA_PESTANA) || ss.getSheets()[0];
+  hoja.appendRow([
+    String(j.punto || ''),
+    String(j.fecha || ''),
+    texto,
+    String(j.operador || ''),
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'America/Guayaquil', 'yyyy-MM-dd HH:mm')
+  ]);
+  var fila = hoja.getLastRow();
+  hoja.getRange(fila, 3).setWrap(true);
+  return json({ ok: true, fila: fila, hoja: ss.getUrl() });
+}
+
 // --------------------------------- ayudantes ---------------------------------
 /* Cada levantamiento tiene su carpeta raíz. Solo se aceptan estos nombres. */
-var RAIZ_VALIDAS = ['Inspección GNSS - Pedro Moncayo', 'Pruebas GNSS - Rumiñahui'];
+var RAIZ_VALIDAS = [
+  'Inspección GNSS - Pedro Moncayo',
+  'Inspección GNSS - Pedro Moncayo/VISTA ATRÁS',
+  'Pruebas GNSS - Rumiñahui'
+];
 
+/* Devuelve la carpeta raíz de un levantamiento. Acepta rutas con "/" (p. ej.
+   "Inspección GNSS - Pedro Moncayo/VISTA ATRÁS"): se recorre nivel por nivel y se
+   crea lo que falte. Una ruta que no esté en la lista se rechaza (se usa la raíz). */
 function carpetaRaiz(nombre) {
-  var n = String(nombre || CARPETA_RAIZ);
+  var n = String(nombre || CARPETA_RAIZ).replace(/^\/+|\/+$/g, '').replace(/\s*\/\s*/g, '/');
   if (RAIZ_VALIDAS.indexOf(n) < 0) n = CARPETA_RAIZ;
-  var it = DriveApp.getFoldersByName(n);
-  if (it.hasNext()) return it.next();
-  return DriveApp.createFolder(n);
+  var partes = n.split('/');
+  var act = null;
+  for (var i = 0; i < partes.length; i++) {
+    act = act ? carpetaDe(partes[i], act) : carpetaDe(partes[i], DriveApp.getRootFolder());
+  }
+  return act;
 }
 
 function carpeta(nombre, padre) {

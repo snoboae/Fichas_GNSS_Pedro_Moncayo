@@ -126,6 +126,82 @@ const PROYECTO_RUMI = {
   "epoca": ""
 };
 
+/* ================= Puntos Vista Atrás (VA) =================
+   Un VA por hito de la red, con la misma numeración (RG-50-01 -> VA-50-01).
+   "e"/"n": coordenada del VA tal como quedó medida (foto del GPSMAP o shapefile).
+   "fuente": de dónde salió esa coordenada ("foto" | "shapefile").
+   "matVA": materialización prevista del VA según el diseño (la ficha registra la ejecutada).
+   El hito del diseño se busca con PUNTO_HITO(codigo). */
+const PUNTOS_VA = [
+  {"c": "VA-50-01", "hito": "RG-50-01", "nombre": "Mirador Mojanda", "parroquia": "Tabacundo", "e": 807086, "n": 10009304, "fuente": "foto", "matVA": "Placa 5 cm", "orden": 1},
+  {"c": "VA-50-02", "hito": "RG-50-02", "nombre": "Escuela Particular", "parroquia": "Tabacundo", "e": 811704.4, "n": 10006937.4, "fuente": "estimado", "matVA": "Placa 5 cm", "orden": 2},
+  {"c": "VA-50-03", "hito": "RG-50-03", "nombre": "Santuario Católico", "parroquia": "Tabacundo", "e": 809286, "n": 10005310, "fuente": "foto", "matVA": "Placa 5 cm", "orden": 3},
+  {"c": "VA-50-04", "hito": "RG-50-04", "nombre": "Casa Comunal Luis Freire", "parroquia": "Tabacundo", "e": 812863, "n": 10003804, "fuente": "foto", "matVA": "", "orden": 4},
+  {"c": "VA-50-05", "hito": "RG-50-05", "nombre": "Casa Comunal", "parroquia": "Tabacundo", "e": 810575, "n": 10003289, "fuente": "foto", "matVA": "Placa 5 cm", "orden": 5},
+  {"c": "VA-50-06", "hito": "RG-50-06", "nombre": "Comunidad", "parroquia": "Tabacundo", "e": 812901, "n": 10001902, "fuente": "foto", "matVA": "", "orden": 6},
+  {"c": "VA-51-01", "hito": "RG-51-01", "nombre": "EMASA", "parroquia": "La Esperanza", "e": 804961, "n": 10006706, "fuente": "foto", "matVA": "", "orden": 7},
+  {"c": "VA-51-02", "hito": "RG-51-02", "nombre": "Plaza central Iglesia la Esperanza", "parroquia": "La Esperanza", "e": 806188, "n": 10004534, "fuente": "foto", "matVA": "Placa 5 cm", "orden": 8},
+  {"c": "VA-51-03", "hito": "RG-51-03", "nombre": "Iglesia Cubinche", "parroquia": "La Esperanza", "e": 806940, "n": 10001931, "fuente": "foto", "matVA": "", "orden": 9},
+  {"c": "VA-SF-51-01", "hito": "RG-SF-51-01", "nombre": "Vía Lagunas de Mojanda", "parroquia": "La Esperanza", "e": 805327, "n": 10011195, "fuente": "foto", "matVA": "", "orden": 10},
+  {"c": "VA-52-01", "hito": "RG-52-01", "nombre": "Paligal Camping", "parroquia": "Malchingui", "e": 796136, "n": 10007815, "fuente": "foto", "matVA": "", "orden": 11},
+  {"c": "VA-52-02", "hito": "RG-52-02", "nombre": "Escuela del milenio", "parroquia": "Malchingui", "e": 795350, "n": 10005368, "fuente": "foto", "matVA": "", "orden": 12},
+  {"c": "VA-52-03", "hito": "RG-52-03", "nombre": "Casa comunal", "parroquia": "Malchingui", "e": 791990.4262, "n": 10003202.6351, "fuente": "shapefile", "matVA": "", "orden": 13},
+  {"c": "VA-52-04", "hito": "RG-52-04", "nombre": "Hipodromo Jerusalem", "parroquia": "Malchingui", "e": 794655, "n": 9998964, "fuente": "foto", "matVA": "", "orden": 14},
+  {"c": "VA-53-01", "hito": "RG-53-01", "nombre": "Parque Central Tocachi", "parroquia": "Tocachi", "e": 801834, "n": 10004942, "fuente": "foto", "matVA": "", "orden": 15},
+  {"c": "VA-53-02", "hito": "RG-53-02", "nombre": "Centro Cochasqui cerca de la Iglesia", "parroquia": "Tocachi", "e": 798961, "n": 10003863, "fuente": "foto", "matVA": "", "orden": 16},
+  {"c": "VA-53-03", "hito": "RG-53-03", "nombre": "Peaje Cochasqui", "parroquia": "Tocachi", "e": 801257, "n": 10001274, "fuente": "foto", "matVA": "", "orden": 17},
+  {"c": "VA-53-04", "hito": "RG-53-04", "nombre": "Reservorios Tanda", "parroquia": "Tocachi", "e": 796567, "n": 9999870, "fuente": "foto", "matVA": "", "orden": 18},
+  {"c": "VA-54-01", "hito": "RG-54-01", "nombre": "Escuela Patricia Brown", "parroquia": "Tupigachi", "e": 811354, "n": 10013382, "fuente": "shapefile", "matVA": "", "orden": 19},
+  {"c": "VA-54-02", "hito": "RG-54-02", "nombre": "Iglesia", "parroquia": "Tupigachi", "e": 813051.299, "n": 10011479.8863, "fuente": "shapefile", "matVA": "", "orden": 20},
+  {"c": "VA-54-03", "hito": "RG-54-03", "nombre": "Tanques de agua San Jose", "parroquia": "Tupigachi", "e": 810231, "n": 10010342, "fuente": "foto", "matVA": "", "orden": 21},
+  {"c": "VA-54-04", "hito": "RG-54-04", "nombre": "Estacion", "parroquia": "Tupigachi", "e": 813564, "n": 10008854, "fuente": "foto", "matVA": "", "orden": 22}
+];
+
+/* Puntos VA por hito: RG-50-01 -> VA-50-01 (incluye el SF). */
+const VA_DE_HITO = (() => {
+  const m = {};
+  for (const p of PUNTOS_VA) m[p.hito] = p.c;
+  return m;
+})();
+
+/* Hito del diseño asociado a un VA (o null). */
+function PUNTO_HITO(codigo) {
+  const va = PUNTOS_VA.find((p) => p.c === codigo);
+  if (!va) return null;
+  return PUNTOS.find((h) => h.c === va.hito) || null;
+}
+
+const PROYECTO_VA = {
+  id: 'va',
+  nombre: 'Levantamiento VA Pedro Moncayo',
+  corto: 'Vista Atrás',
+  detalle: '22 puntos vista atrás · una medición cada uno',
+  raizDrive: 'Inspección GNSS - Pedro Moncayo/VISTA ATRÁS',
+  carpetaProyecto: 'Inspección GNSS - Pedro Moncayo/VISTA ATRÁS',
+  tituloFicha: 'PUNTO VISTA ATRÁS',
+  producto: 'Registro de campo de los puntos vista atrás',
+  contrato: PROYECTO.contrato,
+  proceso: PROYECTO.proceso,
+  entidad: PROYECTO.entidad,
+  area: PROYECTO.area,
+  consultor: PROYECTO.consultor,
+  provincia: PROYECTO.provincia,
+  canton: PROYECTO.canton,
+  zona: PROYECTO.zona,
+  hemisferio: PROYECTO.hemisferio,
+  epsg: PROYECTO.epsg,
+  datum: PROYECTO.datum,
+  epoca: PROYECTO.epoca,
+  observacionesEnPDF: false
+};
+
+/* Una sola medición por punto. */
+const RUTA_VA = { unica: PUNTOS_VA.map((p) => p.c) };
+
+/* Puntos VA que NO tienen panorámica del sitio en img/panoramica/ (el resto sí).
+   Ahora los 22 tienen foto de ubicación. */
+const VA_SIN_PANORAMA = [];
+
 const PROYECTOS = {
   pedro: {
     id: 'pedro',
@@ -136,6 +212,16 @@ const PROYECTOS = {
     datos: PROYECTO,
     puntos: PUNTOS,
     ruta: RUTA
+  },
+  va: {
+    id: 'va',
+    nombre: 'Levantamiento VA Pedro Moncayo',
+    corto: 'Vista Atrás',
+    detalle: '22 puntos vista atrás · una medición cada uno',
+    raizDrive: 'Inspección GNSS - Pedro Moncayo/VISTA ATRÁS',
+    datos: PROYECTO_VA,
+    puntos: PUNTOS_VA,
+    ruta: RUTA_VA
   },
   rumi: {
     id: 'rumi',
