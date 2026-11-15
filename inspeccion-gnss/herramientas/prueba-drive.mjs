@@ -203,6 +203,24 @@ check(pedidosCopia.length === 3 && pedidosCopia.every((x) => x.siExiste === 'cop
   'con copia, el PDF, la foto y el JSON piden la misma carpeta COPIA 2',
   JSON.stringify(pedidosCopia.map((x) => x.nombre)));
 
+/* --------- la observación del VA se manda con la clave --------- */
+const nObs = recibidos.length;
+const rObs = await Drive.anotarObservacion({ ...ficha, observaciones: 'Sin novedad.' }, 'Inspección GNSS - Pedro Moncayo/VISTA ATRÁS');
+const pedidoObs = recibidos[nObs];
+check(pedidoObs && pedidoObs.op === 'obs', 'la observación se envía con op "obs"', pedidoObs && pedidoObs.op);
+check(!!pedidoObs && pedidoObs.clave === 'secreta',
+  'la observación lleva la misma clave que las subidas', pedidoObs && pedidoObs.clave);
+check(!!pedidoObs && pedidoObs.raiz === 'Inspección GNSS - Pedro Moncayo/VISTA ATRÁS',
+  'la observación pide la carpeta VISTA ATRÁS', pedidoObs && pedidoObs.raiz);
+check(!!pedidoObs && pedidoObs.punto === ficha.codigo && pedidoObs.texto === 'Sin novedad.',
+  'la observación lleva punto y texto', pedidoObs && (pedidoObs.punto + ' · ' + pedidoObs.texto));
+check(rObs && rObs.ok === true, 'la observación se anota sin error', JSON.stringify(rObs).slice(0, 80));
+
+/* una ficha sin observaciones no manda nada */
+const nSin = recibidos.length;
+await Drive.anotarObservacion({ ...ficha, observaciones: '   ' }, undefined);
+check(recibidos.length === nSin, 'sin texto no se envía ninguna petición');
+
 server.close();
 console.log(`\nResultado: ${ok} correctas, ${fail} fallidas`);
 process.exit(fail ? 1 : 0);

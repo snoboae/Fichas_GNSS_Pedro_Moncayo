@@ -798,6 +798,10 @@ const App = (() => {
     if ($('d-obsPanel')) {
       $('d-obsPanel').classList.toggle('hidden', !obs);
       if ($('d-obs')) $('d-obs').textContent = obs;
+      /* en el VA la observación vive en la hoja de Drive: si no llegó, se puede reintentar */
+      const pend = esVA() && !!obs && !!f.obsPendiente;
+      if ($('d-obsAviso')) $('d-obsAviso').classList.toggle('hidden', !pend);
+      if ($('d-obsAccion')) $('d-obsAccion').classList.toggle('hidden', !pend);
     }
     $('d-fotosPanel').classList.toggle('hidden', !metas.length);
 
@@ -999,9 +1003,14 @@ const App = (() => {
       if (esVA() && String(f.observaciones || '').trim()) {
         try {
           await Drive.anotarObservacion(f, PR().raizDrive);
+          f.obsAnotada = true; f.obsPendiente = false;
         } catch (eObs) {
+          f.obsPendiente = true;             // queda el botón para reintentar desde el detalle
           avisoObs = ' (la observación no se pudo anotar: ' + eObs.message + ')';
         }
+        await DB.put('fichas', f); S.fichas.set(id, f);
+        renderTodo(); renderDrive();
+        if (S.sel && S.sel.id === id && !$('v-detalle').classList.contains('hidden')) verDetalle(id);
       }
       toast((r.sinConfirmar ? 'Enviado a Drive (no se pudo confirmar la respuesta).' : 'Ficha subida a Drive.') + avisoObs,
         avisoObs ? 'err' : 'ok');
@@ -1627,6 +1636,23 @@ const App = (() => {
     }
 
     $('btnDetBack').addEventListener('click', () => { mostrar('puntos'); renderTodo(); });
+    $('btnObsDrive').addEventListener('click', async () => {
+      const id = S.sel && S.sel.id;
+      const f = id ? miFicha(id) : null;
+      if (!f) return;
+      if (!Drive.configurado()) { toast('Configura la URL y la clave del script en la pestaña Drive.', 'err'); return; }
+      busy(true, 'Anotando la observación…');
+      try {
+        await Drive.anotarObservacion(f, PR().raizDrive);
+        f.obsAnotada = true; f.obsPendiente = false;
+        await DB.put('fichas', f); S.fichas.set(f.id, f);
+        renderTodo();
+        verDetalle(f.id);
+        toast('Observación anotada en la hoja de Drive.', 'ok');
+      } catch (e) {
+        toast('No se pudo anotar: ' + e.message, 'err');
+      } finally { busy(false); }
+    });
     $('btnDetPdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
     $('d-pdf').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, false));
     $('d-share').addEventListener('click', () => S.sel && descargarPDF(S.sel.id, true));

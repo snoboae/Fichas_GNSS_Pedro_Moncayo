@@ -289,6 +289,7 @@ const Drive = (() => {
     const texto = String((ficha && ficha.observaciones) || '').trim();
     if (!texto) return { ok: true, fila: 0 };
     return enviar({
+      clave,
       op: 'obs',
       raiz: raiz || CONFIG.carpetaProyecto,
       punto: String(ficha.codigo || ''),
