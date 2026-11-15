@@ -90,7 +90,25 @@ function hojaFalsa(nombre) {
     setName: (n) => { h.nombre = n; },
     appendRow: (f) => h.filas.push(f),
     getLastRow: () => h.filas.length,
-    getRange: () => ({ setFontWeight: () => ({ setBackground: () => ({ setFontColor: () => {} }) }), setWrap: () => {} }),
+    getRange: (r, c, nr, nc) => {
+      const rango = {
+        setFontWeight: () => rango, setBackground: () => rango, setFontColor: () => rango,
+        setWrap: () => rango,
+        getValues: () => {
+          const salida = [];
+          for (let i = 0; i < (nr || 1); i++) {
+            const fila = h.filas[(r - 1) + i] || [];
+            const trozo = [];
+            for (let j = 0; j < (nc || 1); j++) {
+              trozo.push(fila[(c - 1) + j] === undefined ? '' : fila[(c - 1) + j]);
+            }
+            salida.push(trozo);
+          }
+          return salida;
+        }
+      };
+      return rango;
+    },
     setFrozenRows: () => {},
     setColumnWidth: () => {}
   };
@@ -184,6 +202,15 @@ check(r.ok === true, 'Vista Atrás: sube el PDF', JSON.stringify(r).slice(0, 90)
 check(cPeter && cPeter.carpetas.some((c) => c.nombre === 'VISTA ATRÁS'), 'Vista Atrás queda DENTRO de la carpeta de Pedro');
 check(!raizDrive.carpetas.some((c) => c.nombre === 'VISTA ATRÁS'), 'Vista Atrás no se crea en la raíz del Drive');
 
+/* ---------------- 3 bis) reintento con 'continuar' ---------------- */
+r = post({ clave: CLAVE, op: 'subir', raiz: VA, dia: '2026_11_16', carpeta: 'VA_16_11_2026_VA-50-01',
+  punto: 'VA-50-01', nombre: 'VA-50-01_UNICA.pdf', mime: 'application/pdf', datos: PDF, siExiste: 'continuar' });
+check(r.ok === true && r.saltado === true, 'si continúa y el archivo ya está, se salta sin tocarlo', JSON.stringify(r).slice(0, 80));
+
+r = post({ clave: CLAVE, op: 'subir', raiz: VA, dia: '2026_11_16', carpeta: 'VA_16_11_2026_VA-50-01',
+  punto: 'VA-50-01', nombre: 'VA-50-01_UNICA_placa_2.jpg', mime: 'image/jpeg', datos: PDF, siExiste: 'continuar' });
+check(r.ok === true && !r.saltado && r.subcarpeta === '', 'si continúa y falta, se crea en la carpeta de la ficha', JSON.stringify(r).slice(0, 80));
+
 /* ---------------- 4) observaciones ---------------- */
 r = post({ clave: CLAVE, raiz: VA, op: 'obs', punto: 'VA-50-01', fecha: '2026-11-16',
   operador: 'Operador VA', texto: 'Sin novedad, placa visible.' });
@@ -192,6 +219,18 @@ const libro = hojas[0];
 check(libro && libro.hojas[0].filas[0][0] === 'PUNTO', 'la hoja arranca con cabecera PUNTO/FECHA/…');
 const fila1 = libro && libro.hojas[0].filas[1];
 check(!!fila1 && fila1[2] === 'Sin novedad, placa visible.', 'la fila trae el texto de la observación', JSON.stringify(fila1 || null));
+
+/* la misma observación, otra vez: no se duplica */
+const antes = libro.hojas[0].filas.length;
+r = post({ clave: CLAVE, raiz: VA, op: 'obs', punto: 'VA-50-01', fecha: '2026-11-16',
+  operador: 'Operador VA', texto: 'Sin novedad, placa visible.' });
+check(r.ok === true && r.repetida === true, 'la misma observación no se escribe dos veces', JSON.stringify(r).slice(0, 90));
+check(libro.hojas[0].filas.length === antes, 'la hoja no ganó filas repetidas', libro.hojas[0].filas.length);
+
+/* una observación distinta del mismo punto sí entra */
+r = post({ clave: CLAVE, raiz: VA, op: 'obs', punto: 'VA-50-01', fecha: '2026-11-16',
+  operador: 'Operador VA', texto: 'Se volvió a medir con otra antena.' });
+check(r.ok === true && !r.repetida && libro.hojas[0].filas.length === antes + 1, 'una observación nueva sí se agrega');
 
 /* ---------------- 5) errores y compatibilidad ---------------- */
 r = post({ clave: 'otra', raiz: PETER, nombre: 'x.pdf', datos: PDF });

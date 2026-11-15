@@ -203,6 +203,34 @@ check(pedidosCopia.length === 3 && pedidosCopia.every((x) => x.siExiste === 'cop
   'con copia, el PDF, la foto y el JSON piden la misma carpeta COPIA 2',
   JSON.stringify(pedidosCopia.map((x) => x.nombre)));
 
+/* --------- reintento: 'continuar' en todas las piezas --------- */
+const nCont = recibidos.length;
+const rCont = await Drive.subirFicha(ficha, pdf, [fotoJPEG], () => {}, undefined, { continuar: true });
+const pedidosCont = recibidos.slice(nCont);
+check(pedidosCont.length === 3 && pedidosCont.every((x) => x.siExiste === 'continuar'),
+  'el reintento pide "continuar" en el PDF, la foto y el JSON',
+  JSON.stringify(pedidosCont.map((x) => x.siExiste)));
+check(rCont && rCont.ruta.indexOf('COPIA') < 0, 'el reintento NO crea carpeta COPIA', rCont && rCont.ruta);
+
+/* --------- si una foto falla, el error trae lo que ya se subió --------- */
+const fetchOk = globalThis.fetch;
+let llamadas = 0;
+globalThis.fetch = async (u, o) => {
+  llamadas++;
+  if (llamadas === 2) {
+    return { ok: true, status: 200, text: async () => JSON.stringify({ ok: false, error: 'script: disco lleno' }) };
+  }
+  return fetchOk(u, o);
+};
+try {
+  await Drive.subirFicha(ficha, pdf, [fotoJPEG, fotoJPG], () => {});
+  check(false, 'un fallo a mitad debe fallar');
+} catch (e) {
+  check(e && e.parcial === true && e.archivos && e.archivos.length === 1,
+    'el error guarda los archivos que sí llegaron', JSON.stringify(e.archivos));
+}
+globalThis.fetch = fetchOk;
+
 /* --------- la observación del VA se manda con la clave --------- */
 const nObs = recibidos.length;
 const rObs = await Drive.anotarObservacion({ ...ficha, observaciones: 'Sin novedad.' }, 'Inspección GNSS - Pedro Moncayo/VISTA ATRÁS');

@@ -217,7 +217,8 @@ const Drive = (() => {
   /* ficha: registro; pdfBlob: Blob del PDF; fotos: [{tipo, orden, nombre, orig, blob, origTipo}] */
   async function subirFicha(ficha, pdfBlob, fotos, onPaso, raiz, opciones) {
     const opc = opciones || {};
-    const siExiste = opc.siExiste || '';                 // '' | 'copia'
+    /* 'continuar' = reintento de una subida a medias: el script salta lo que ya está */
+    const siExiste = opc.continuar ? 'continuar' : (opc.siExiste || '');   // '' | 'copia' | 'continuar'
     const carpetaCopia = opc.carpetaCopia || '';         // 'COPIA' | 'COPIA 1'… (lo decide el script)
     if (!configurado()) throw new ErrorDrive('Falta configurar la URL y la clave del script de Drive.', 'sin_config');
     const paso = (t) => { if (onPaso) onPaso(t); };
@@ -233,6 +234,7 @@ const Drive = (() => {
     const base = `${punto}_${etq}`;
     const archivos = [];
 
+    try {
     paso('Ficha PDF…');
     const rPdf = await subirArchivo({
       raiz, dia, carpeta, punto, nombre: `${base}.pdf`, mime: 'application/pdf', blob: pdfBlob,
@@ -281,6 +283,12 @@ const Drive = (() => {
     const sub = copia || '';
     const ruta = `${raiz || CONFIG.carpetaProyecto}/${dia}/${carpeta}` + (sub ? '/' + sub : '');
     return { ruta, archivos, carpeta, dia, fecha, subcarpeta: sub };
+    } catch (e) {
+      /* se conservan los archivos que sí llegaron, para poder completar el resto */
+      e.archivos = archivos.slice();
+      e.parcial = archivos.length > 0;
+      throw e;
+    }
   }
 
   /* Anota la observación de una ficha en la hoja de cálculo del levantamiento.

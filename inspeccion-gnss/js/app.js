@@ -799,7 +799,7 @@ const App = (() => {
       $('d-obsPanel').classList.toggle('hidden', !obs);
       if ($('d-obs')) $('d-obs').textContent = obs;
       /* en el VA la observación vive en la hoja de Drive: si no llegó, se puede reintentar */
-      const pend = esVA() && !!obs && !!f.obsPendiente;
+      const pend = esVA() && !!obs && (!!f.obsPendiente || f.obsEnviada !== obs);
       if ($('d-obsAviso')) $('d-obsAviso').classList.toggle('hidden', !pend);
       if ($('d-obsAccion')) $('d-obsAccion').classList.toggle('hidden', !pend);
     }
@@ -820,6 +820,11 @@ const App = (() => {
         '.<br>Pulsa "Subir esta ficha a Drive" si quieres guardarla como copia (quedan las dos).';
     } else if (dr.estado === 'subida') {
       estadoDrive = `Subida el ${new Date(dr.fecha).toLocaleString('es-EC')}.<br>Carpeta: <code>${esc(dr.ruta || '')}</code>`;
+    } else if (dr.estado === 'parcial') {
+      const n = (dr.archivos || []).length;
+      estadoDrive = '<b class="warn">La subida quedó a medias.</b> ' +
+        `Se alcanzaron a subir ${n} archivo(s)${dr.error ? ': ' + esc(dr.error) : ''}.<br>` +
+        'Pulsa "Subir esta ficha a Drive": se completa lo que falta y no se duplica nada.';
     } else if (dr.estado === 'error') {
       estadoDrive = `La última subida falló: ${esc(dr.error || '')}`;
     } else {
@@ -912,16 +917,43 @@ const App = (() => {
 
   const textoFaltantes = (falta) => '<ul>' + falta.map((x) => `<li>${esc(x)}</li>`).join('') + '</ul>';
 
-  async function subirUna(id, automatico) {
+  /* Anota la observación del VA en la hoja de Drive. No la repite si el texto no cambió
+     (la hoja también ignora duplicados exactos). Devuelve '' o el aviso de error. */
+  async function anotarObsDe(f) {
+    if (!esVA()) return '';
+    const texto = String(f.observaciones || '').trim();
+    if (!texto) return '';
+    if (f.obsEnviada === texto) { f.obsPendiente = false; return ''; }
+    try {
+      await Drive.anotarObservacion(f, PR().raizDrive);
+      f.obsAnotada = true; f.obsPendiente = false; f.obsEnviada = texto;
+      return '';
+    } catch (e) {
+      f.obsPendiente = true;
+      return ' (la observación no se pudo anotar: ' + e.message + ')';
+    }
+  }
+
+  /* Sube una ficha. Devuelve el resultado para poder encadenar (lote, automático…):
+     'subida' | 'incompleta' | 'conflicto' | 'error' | 'sincfg'.
+     opciones.silencioso = true → no muestra toasts (la usa la subida por lotes). */
+  async function subirUna(id, opciones) {
+    const o = (typeof opciones === 'boolean') ? { automatico: opciones } : (opciones || {});
+    const automatico = !!o.automatico;
+    const callar = !!o.silencioso;
+    const decir = (txt, tipo) => { if (!callar) toast(txt, tipo); };
     const f = miFicha(id);
-    if (!f) { toast('Guarda la ficha antes de subirla.', 'err'); return; }
-    if (!Drive.configurado()) { toast('Configura la URL y la clave del script en la pestaña Drive.', 'err'); return; }
+    if (!f) { decir('Guarda la ficha antes de subirla.', 'err'); return 'error'; }
+    if (!Drive.configurado()) {
+      decir('Configura la URL y la clave del script en la pestaña Drive.', 'err');
+      return 'sincfg';
+    }
     const falta = await faltantesFicha(f);
     if (falta.length) {
       FALTANTES.set(f.id, falta);
       renderTodo();
-      toast('Faltan datos obligatorios: la ficha no se sube todavía.', 'err');
-      if (!automatico) {
+      decir('Faltan datos obligatorios: la ficha no se sube todavía.', 'err');
+      if (!automatico && !callar) {
         await avisar({
           titulo: 'Faltan datos obligatorios',
           html: '<p>Esta ficha todavía no se puede subir a Drive. Falta:</p>' + textoFaltantes(falta) +
@@ -929,23 +961,29 @@ const App = (() => {
           botones: [{ txt: 'Entendido', clase: 'primary', valor: 'ok' }]
         });
       }
-      return;
+      return 'incompleta';
     }
     FALTANTES.delete(f.id);
+
+    /* ¿es un reintento de una subida que quedó a medias? Entonces se completa lo que falta:
+       el script salta los archivos que ya están y crea los que faltan, sin duplicar nada. */
+    const reintento = !!(f.drive && (f.drive.estado === 'parcial' || f.drive.estado === 'error'));
 
     /* ¿ya hay una ficha de este punto en Drive? (nunca se borra nada sin preguntar) */
     let opc = { siExiste: '', carpetaCopia: '' };
     let info = null;
     try {
+      if (reintento) throw { code: 'reintento' };      // no se pregunta: se completa
       busy(true, 'Revisando Drive…');
       info = await Drive.revisarExistente(f, PR().raizDrive);
     } catch (e) {
-      if (e && e.code === 'op') {
-        /* el script instalado es anterior a la comprobación de duplicados */
-        toast('El script de Drive es antiguo: esta ficha se sube sin comprobar duplicados.', 'err');
+      if (e && e.code === 'reintento') {
+        /* reintento: se completa sin preguntar (nada se sobrescribe) */
+      } else if (e && e.code === 'op') {
+        decir('El script de Drive es antiguo: esta ficha se sube sin comprobar duplicados.', 'err');
       } else {
-        toast('No se pudo revisar Drive: ' + (e && e.message), 'err');
-        return;
+        decir('No se pudo revisar Drive: ' + (e && e.message), 'err');
+        return 'error';
       }
     } finally {
       busy(false);                       // pase lo que pase, se quita "Revisando Drive…"
@@ -953,6 +991,12 @@ const App = (() => {
 
     /* la ficha ya existe si está su PDF: ese nombre no cambia (las fotos sí, .jpg/.jpeg) */
     if (info && info.existe) {
+      if (callar) {
+        /* en lote no se decide sola: queda marcada para resolverla a mano */
+        f.drive = { estado: 'conflicto', fecha: Date.now(), existente: info.existente, autor: info.autor };
+        await DB.put('fichas', f); S.fichas.set(id, f);
+        return 'conflicto';
+      }
       const aut = info.autor || {};
       const cuando = (info.existente && info.existente.actualizado) || aut.fecha || 'fecha desconocida';
       const otro = aut.operador
@@ -978,17 +1022,19 @@ const App = (() => {
         });
         await DB.put('fichas', f); S.fichas.set(id, f);
         renderTodo(); renderDrive();
-        toast('La ficha quedó marcada con conflicto: no se subió nada.', 'err');
-        return;
+        decir('La ficha quedó marcada con conflicto: no se subió nada.', 'err');
+        return 'conflicto';
       }
       opc = { siExiste: 'copia', carpetaCopia: info.carpetaCopia || 'COPIA' };
     }
 
     try {
-      busy(true, 'Preparando la subida…');
+      busy(true, (o.progreso ? `Subiendo ${o.progreso}: ` : '') +
+        (reintento ? 'completando lo que falta…' : 'preparando la subida…'));
       const { blob } = await pdfDe(id);
       const fotos = await fotosParaDrive(id);
-      const r = await Drive.subirFicha(f, blob, fotos, (t) => busy(true, t), PR().raizDrive, opc);
+      const opcionesDrive = reintento ? { continuar: true } : opc;
+      const r = await Drive.subirFicha(f, blob, fotos, (t2) => busy(true, t2), PR().raizDrive, opcionesDrive);
       f.drive = { estado: 'subida', fecha: Date.now(), ruta: r.ruta, archivos: r.archivos, sinConfirmar: !!r.sinConfirmar };
       await DB.put('fichas', f);
       S.fichas.set(id, f);
@@ -999,77 +1045,70 @@ const App = (() => {
       renderTodo(); renderDrive();
       if (S.sel && S.sel.id === id && !$('v-detalle').classList.contains('hidden')) verDetalle(id);
       /* en el levantamiento VA la observación va a la hoja de Drive, no al PDF */
-      let avisoObs = '';
+      const avisoObs = await anotarObsDe(f);
       if (esVA() && String(f.observaciones || '').trim()) {
-        try {
-          await Drive.anotarObservacion(f, PR().raizDrive);
-          f.obsAnotada = true; f.obsPendiente = false;
-        } catch (eObs) {
-          f.obsPendiente = true;             // queda el botón para reintentar desde el detalle
-          avisoObs = ' (la observación no se pudo anotar: ' + eObs.message + ')';
-        }
         await DB.put('fichas', f); S.fichas.set(id, f);
         renderTodo(); renderDrive();
         if (S.sel && S.sel.id === id && !$('v-detalle').classList.contains('hidden')) verDetalle(id);
       }
-      toast((r.sinConfirmar ? 'Enviado a Drive (no se pudo confirmar la respuesta).' : 'Ficha subida a Drive.') + avisoObs,
+      decir((r.sinConfirmar ? 'Enviado a Drive (no se pudo confirmar la respuesta).' : 'Ficha subida a Drive.') + avisoObs,
         avisoObs ? 'err' : 'ok');
+      return 'subida';
     } catch (e) {
-      f.drive = { estado: 'error', fecha: Date.now(), error: e.message };
+      /* si ya se había subido parte de la ficha queda 'parcial': el reintento completa lo que falta */
+      const parcial = !!(e && e.parcial) || !!(f.drive && f.drive.estado === 'parcial');
+      f.drive = {
+        estado: parcial ? 'parcial' : 'error',
+        fecha: Date.now(), error: e.message,
+        archivos: (e && e.archivos) || (f.drive && f.drive.archivos) || []
+      };
       await DB.put('fichas', f);
       S.fichas.set(id, f);
       renderDrive();
-      toast('No se pudo subir: ' + e.message, 'err');
-      void automatico;
+      decir((parcial ? 'La subida quedó a medias: ' : 'No se pudo subir: ') + e.message, 'err');
+      return 'error';
     } finally { busy(false); }
   }
 
+  /* Sube por lotes: recorre las fichas y llama a subirUna (el mismo camino que el botón
+     de la ficha). Así el reintento completa lo que falta, no se duplica nada y la
+     observación se anota igual. Devuelve un resumen para el mensaje final. */
   async function subirPendientes(soloErrores) {
-    const lista = sesiones().map((s) => miFicha(s.id)).filter(Boolean)
-      .filter((f) => (soloErrores ? f.drive && f.drive.estado === 'error' : !f.drive || f.drive.estado !== 'subida'));
-    if (!lista.length) { toast('No hay fichas pendientes de subir.', 'ok'); return; }
-    if (!Drive.configurado()) { toast('Configura la URL y la clave del script primero.', 'err'); return; }
-    let ok = 0, err = 0, incompletas = 0, conflictos = 0;
+    if (!Drive.configurado()) {
+      toast('Configura la URL y la clave del script en la pestaña Drive.', 'err');
+      return;
+    }
+    const todas = sesiones().map((s) => miFicha(s.id)).filter(Boolean);
+    const lista = todas.filter((f) => {
+      const est = f.drive && f.drive.estado;
+      if (est === 'subida') return false;
+      if (soloErrores) return est === 'error' || est === 'parcial';
+      return true;                       // pendientes: sin subir, a medias o en conflicto
+    });
+    if (!lista.length) {
+      toast(soloErrores ? 'No hay fichas con error que reintentar.' : 'No hay fichas pendientes de subir.', 'ok');
+      return;
+    }
+
+    const cuenta = { subida: 0, incompleta: 0, conflicto: 0, error: 0, sincfg: 0 };
+    const fallidas = [];
+    let n = 0;
     for (const f of lista) {
-      const falta = await faltantesFicha(f);
-      if (falta.length) { incompletas++; FALTANTES.set(f.id, falta); continue; }
-      busy(true, `Subiendo ${f.id} (${ok + err + 1} de ${lista.length})…`);
-      let info = null;
-      try {
-        info = await Drive.revisarExistente(f, PR().raizDrive);
-      } catch (eRev) {
-        if (!eRev || eRev.code !== 'op') throw eRev;   // error real: se informa abajo
-        info = null;                                   // script antiguo: se sube igual
-      }
-      try {
-        if (info && info.existe) {
-          /* la subida por lotes no decide sola: se marca y se resuelve a mano */
-          f.drive = { estado: 'conflicto', fecha: Date.now(), existente: info.existente, autor: info.autor };
-          conflictos++;
-          await DB.put('fichas', f);
-          S.fichas.set(f.id, f);
-          renderDrive(); renderTodo();
-          continue;
-        }
-        const { blob } = await pdfDe(f.id);
-        const fotos = await fotosParaDrive(f.id);
-        const r = await Drive.subirFicha(f, blob, fotos, null, PR().raizDrive);
-        f.drive = { estado: 'subida', fecha: Date.now(), ruta: r.ruta, archivos: r.archivos, sinConfirmar: !!r.sinConfirmar };
-        ok++;
-      } catch (e) {
-        f.drive = { estado: 'error', fecha: Date.now(), error: e.message };
-        err++;
-      }
-      await DB.put('fichas', f);
-      S.fichas.set(f.id, f);
-      renderDrive(); renderTodo();
+      n++;
+      const res = await subirUna(f.id, { silencioso: true, automatico: true, progreso: `${n} de ${lista.length}` });
+      cuenta[res] = (cuenta[res] || 0) + 1;
+      if (res === 'error') fallidas.push(f.codigo);
     }
     busy(false);
-    renderTodo();
-    toast(`Subida terminada: ${ok} correcta(s)` + (err ? `, ${err} con error` : '') +
-      (incompletas ? `, ${incompletas} sin subir por datos incompletos` : '') +
-      (conflictos ? `, ${conflictos} ya existían en Drive` : '') + '.',
-    (err || incompletas || conflictos) ? 'err' : 'ok');
+    renderTodo(); renderDrive();
+
+    const partes = [`${cuenta.subida} subida(s)`];
+    if (cuenta.incompleta) partes.push(`${cuenta.incompleta} sin datos completos`);
+    if (cuenta.conflicto) partes.push(`${cuenta.conflicto} ya existían en Drive`);
+    if (cuenta.error) partes.push(`${cuenta.error} con error`);
+    toast('Subida terminada: ' + partes.join(' · ') + '.' +
+      (fallidas.length ? ' Revisa: ' + fallidas.join(', ') + '.' : ''),
+    (cuenta.error || cuenta.incompleta || cuenta.conflicto) ? 'err' : 'ok');
   }
 
   function renderDrive() {
@@ -1088,9 +1127,14 @@ const App = (() => {
 
     const todas = fichasProyecto();
     const total = todas.length;
-    const subidas = todas.filter((f) => f.drive && f.drive.estado === 'subida').length;
-    const errores = todas.filter((f) => f.drive && f.drive.estado === 'error').length;
-    $('driveResumen').innerHTML = `Fichas guardadas: <b>${total}</b> · en Drive: <b>${subidas}</b> · pendientes: <b>${total - subidas - errores}</b>` +
+    const estado = (f) => (f.drive && f.drive.estado) || 'pend';
+    const subidas = todas.filter((f) => estado(f) === 'subida').length;
+    const errores = todas.filter((f) => estado(f) === 'error').length;
+    const parciales = todas.filter((f) => estado(f) === 'parcial').length;
+    const conflictos = todas.filter((f) => estado(f) === 'conflicto').length;
+    $('driveResumen').innerHTML = `Fichas guardadas: <b>${total}</b> · en Drive: <b>${subidas}</b> · pendientes: <b>${total - subidas - errores - parciales - conflictos}</b>` +
+      (parciales ? ` · a medias: <b class="err">${parciales}</b>` : '') +
+      (conflictos ? ` · en conflicto: <b class="err">${conflictos}</b>` : '') +
       (errores ? ` · con error: <b class="err">${errores}</b>` : '');
     $('autoSubir').checked = !!S.ajustes.autoSubir;
     $('borrarOrig').checked = !!S.ajustes.borrarOrig;
@@ -1098,10 +1142,15 @@ const App = (() => {
     $('driveCola').innerHTML = fichasProyecto()
       .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')))
       .map((f) => {
-      const e = (f.drive && f.drive.estado) || 'pend';
-      const cls = e === 'subida' ? 'sub' : e === 'error' ? 'err' : 'pend';
-      const txt = e === 'subida' ? 'En Drive' : e === 'error' ? 'Error' : 'Pendiente';
-      const det = e === 'error' ? esc((f.drive || {}).error || '') : PDF.fmtFecha(f.fecha);
+      const e = estado(f);
+      const cls = e === 'subida' ? 'sub' : (e === 'error' || e === 'parcial' || e === 'conflicto') ? 'err' : 'pend';
+      const txt = e === 'subida' ? 'En Drive'
+        : e === 'error' ? 'Error'
+          : e === 'parcial' ? 'A medias'
+            : e === 'conflicto' ? 'Conflicto' : 'Pendiente';
+      const det = (e === 'error' || e === 'parcial') ? esc((f.drive || {}).error || '')
+        : e === 'conflicto' ? 'Ya existe en Drive'
+          : PDF.fmtFecha(f.fecha);
       return `<div class="fila"><div><b>${esc(f.codigo)}</b> ${badge(f.tipo, f.dia)}<small>${det}</small></div><span class="est ${cls}">${txt}</span></div>`;
     }).join('') || '<p class="hint">Todavía no hay fichas guardadas.</p>';
   }
@@ -1644,7 +1693,7 @@ const App = (() => {
       busy(true, 'Anotando la observación…');
       try {
         await Drive.anotarObservacion(f, PR().raizDrive);
-        f.obsAnotada = true; f.obsPendiente = false;
+        f.obsAnotada = true; f.obsPendiente = false; f.obsEnviada = String(f.observaciones || '').trim();
         await DB.put('fichas', f); S.fichas.set(f.id, f);
         renderTodo();
         verDetalle(f.id);

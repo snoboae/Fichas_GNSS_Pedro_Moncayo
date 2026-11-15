@@ -95,6 +95,9 @@ function doPost(e) {
     var blob = Utilities.newBlob(bytes, j.mime || 'application/octet-stream', j.nombre);
 
     /* Decisión por PETICIÓN (no por archivo):
+       · siExiste = 'continuar' → reintento de una subida que quedó a medias: si el archivo ya
+                              está, se salta sin tocarlo; si falta, se crea en la carpeta de la
+                              ficha. Nunca sobrescribe ni duplica.
        · siExiste = 'copia' → todo el juego va a la subcarpeta COPIA / COPIA 1 / COPIA 2…
          (aunque ese archivo en concreto no exista: la extensión puede cambiar, p. ej. .jpeg)
        · si no            → si el nombre ya existe se responde 'existe' y la app decide */
@@ -103,6 +106,12 @@ function doPost(e) {
     var subcarpeta = '';
     var existentes = listaPorNombre(carpetaFicha, String(j.nombre));
 
+    if (politica === 'continuar' && existentes.length) {
+      return json({
+        ok: true, saltado: true, nombre: existentes[0].getName(),
+        dia: dia.getName(), carpeta: carpetaFicha.getName(), url: existentes[0].getUrl()
+      });
+    }
     if (politica === 'copia') {
       var pedida = String(j.carpetaCopia || '');
       var nombreCopia = /^COPIA( [0-9]{1,3})?$/.test(pedida) ? pedida : carpetaCopiaLibre(carpetaFicha);
@@ -158,16 +167,33 @@ function hojaObservaciones(raiz) {
   return ss;
 }
 
-/* Agrega una fila con la observación de un punto. */
+/* Agrega una fila con la observación de un punto.
+   No repite: si ya hay una fila con el mismo PUNTO, FECHA y OBSERVACIÓN, no escribe nada. */
 function anotarObservacion(j) {
   var texto = String(j.texto || '').trim();
   if (!texto) return json({ ok: true, fila: 0, nota: 'sin observación' });
+  var punto = String(j.punto || '');
+  var fecha = String(j.fecha || '');
   var raiz = carpetaRaiz(j.raiz);
   var ss = hojaObservaciones(raiz);
   var hoja = ss.getSheetByName(HOJA_PESTANA) || ss.getSheets()[0];
+
+  /* ¿ya está anotada? (mismo punto, misma fecha y mismo texto) */
+  var ultima = hoja.getLastRow();
+  if (ultima > 1) {
+    var datos = hoja.getRange(2, 1, ultima - 1, 3).getValues();
+    for (var i = 0; i < datos.length; i++) {
+      if (String(datos[i][0]).trim() === punto &&
+          String(datos[i][1]).trim() === fecha &&
+          String(datos[i][2]).trim() === texto) {
+        return json({ ok: true, fila: i + 2, repetida: true, hoja: ss.getUrl() });
+      }
+    }
+  }
+
   hoja.appendRow([
-    String(j.punto || ''),
-    String(j.fecha || ''),
+    punto,
+    fecha,
     texto,
     String(j.operador || ''),
     Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'America/Guayaquil', 'yyyy-MM-dd HH:mm')
